@@ -45,6 +45,7 @@ import argparse
 from typing import List, Tuple, Optional, Dict, Any
 
 # Ajustar path para encontrar os modulos
+sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../utils"))
 
 import numpy as np
@@ -56,14 +57,30 @@ import pickle
 # Bibliotecas de Machine Learning
 from imitation.algorithms.bc import BC
 from imitation.data.types import Trajectory
-from stable_baselines3.common.atari_wrappers import WarpFrame
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage, VecFrameStack
 from stable_baselines3 import PPO
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.logger import KVWriter, Logger, HumanOutputFormat, CSVOutputFormat
 
 # Modulos locais
 from game_env import GenericGameEnv, TemporalAttentionLSTM
+from config.game_config import GAME_CONFIG, TRAINING_CONFIG
+
+import mlflow
+
+class MLflowOutputFormat(KVWriter):
+    """
+    Custom KVWriter to log metrics directly to MLflow.
+    """
+    def write(self, key_values: dict, key_excluded: dict, step: int = 0) -> None:
+        if mlflow.active_run():
+            for key, value in key_values.items():
+                if isinstance(value, (int, float, np.integer, np.floating)):
+                    mlflow.log_metric(key, float(value), step=step)
+
+    def close(self) -> None:
+        pass
 
 
 def print_header(title: str) -> None:
@@ -128,9 +145,18 @@ class DataManager:
                 data = th.load(demo_file, map_location='cpu')
                 
                 if isinstance(data, list):
-                    all_trajectories.extend(data)
-                    print(f"({len(data)} traj.")
+                    for t in data:
+                        obs = t.obs
+                        if obs.ndim == 5 and obs.shape[1] == 1:
+                            obs = np.squeeze(obs, axis=1)
+                        t = Trajectory(obs=obs, acts=t.acts, infos=t.infos, terminal=t.terminal)
+                        all_trajectories.append(t)
+                    print(f"({len(data)} traj.)")
                 else:
+                    obs = data.obs
+                    if obs.ndim == 5 and obs.shape[1] == 1:
+                        obs = np.squeeze(obs, axis=1)
+                    data = Trajectory(obs=obs, acts=data.acts, infos=data.infos, terminal=data.terminal)
                     all_trajectories.append(data)
                     print("(1 traj.)")
                     
@@ -221,12 +247,15 @@ class Trainer:
     
     def _create_env(self):
         """Cria o ambiente base do Stable Baselines3."""
-        env = GenericGameEnv(self.config)
-        env = WarpFrame(env, width=128, height=128)
+        train_config = self.config.copy()
+        train_config["dummy"] = True
+        env = GenericGameEnv(train_config)
         env = DummyVecEnv([lambda: env])
+        env = VecTransposeImage(env)
+        env = VecFrameStack(env, n_stack=4)
         return env
     
-    def setup_bc_trainer(self, trajectories: List[Trajectory]):
+    def setup_bc_trainer(self, trajectories: List[Trajectory], model_path: str = None):
         """
         Configura o treinador de Behavioral Cloning.
         
@@ -238,14 +267,31 @@ class Trainer:
         # Gerador de numeros aleatorios
         rng = np.random.default_rng(seed=42)
         
-        # Criar o trainer de BC
+        # Log formatters
+        log_dir = os.path.join(self.model_save_path, "imitation", "bc_logs")
+        os.makedirs(log_dir, exist_ok=True)
+        output_formats = [HumanOutputFormat(sys.stdout), CSVOutputFormat(os.path.join(log_dir, "progress.csv")), MLflowOutputFormat()]
+        custom_sb3_logger = Logger(folder=log_dir, output_formats=output_formats)
+        
+        from stable_baselines3.common.policies import ActorCriticCnnPolicy
+        policy = None
+        if model_path and os.path.exists(model_path):
+            print(f"[+] Transfer Learning ativado! Carregando: {model_path}")
+            # BC save_policy salva apenas a policy (nao o PPO inteiro), logo usamos ActorCriticCnnPolicy
+            policy = ActorCriticCnnPolicy.load(model_path, device=self.device)
+        elif model_path:
+            print(f"[!] Aviso: Modelo '{model_path}' nao encontrado. Treinando do zero.")
+            
         self.bc_trainer = BC(
             observation_space=self.env.observation_space,
             action_space=self.env.action_space,
+            demonstrations=trajectories,
             rng=rng,
+            device=self.device,
+            policy=policy,
             batch_size=self.batch_size,
-            expert_data=trajectories,  # Trajetorias como 'expert data'
-           环境整治=self.learning_rate,
+            optimizer_kwargs={"lr": self.learning_rate},
+            custom_logger=custom_sb3_logger,
         )
         
         print(f"[OK] BC Trainer configurado:")
@@ -264,15 +310,9 @@ class Trainer:
         
         os.makedirs(save_path, exist_ok=True)
         
-        # Callback para monitorar o treinamento
-        def progress_callback(epoch: int, batch_num: int, batch_size: int):
-            if batch_num % 10 == 0:
-                print(f"  Epoch {epoch}, batch {batch_num}: training...", end="\r")
-        
         self.bc_trainer.train(
             n_epochs=self.epochs,
-            progress_bar=True,  # Mostra barra de progresso
-            # log_interval=5,
+            progress_bar=True,
         )
         
         print(f"\n[OK] Treinamento concluido!")
@@ -299,24 +339,9 @@ def run_dagger_iteration(config: Dict[str, Any],
                          current_model_path: str, 
                          demo_path: str = './demos/dagger/'):
     """
-    Executa uma iteracao de DAGGER (Dataset Aggregation):
-    
-    1. A policy treinada joga e gera predicoes
-    2. O humano observa e intervendo quando necessario (voz efetiva)
-    3. As trajetorias produzidas pelas predicao sao 'rotuladas' com as acoes corretas
-    4. Dados novos sao adicionados ao dataset
-    5. Retreina com os dados combinados
-    
-    Esta funcao e um placeholder - usa a implementacao do imitation-hg-dagger.ipynb
-    para a logica real.
+    Executa uma iteracao de DAGGER (Dataset Aggregation).
     """
     print("\n[DAGGER] Iteracao de refinamento...")
-    print("  1. Policy atual joga e gera predicoes")
-    print("  2. Humanos labels as predicoes (manualmente ou semi-auto)")
-    print("  3. Novos dados adicionados ao dataset")
-    print("  4. Retranging com dados combinados")
-    
-    # TODO: Implementar logica DAGGER completa
     pass
 
 
@@ -332,11 +357,12 @@ Exemplos:
   python train_agent.py --dagger  # Inclui iteracao DAgger
         """)
     
-    parser.add_argument('--epochs', type=int, default=100, help='Numero de epocas')
-    parser.add_argument('--batch', type=int, default=384, help='Tamanho do batch')
-    parser.add_argument('--lr', type=float, default=1e-4, help='Learning rate')
+    parser.add_argument('--epochs', type=int, default=TRAINING_CONFIG.get("epochs", 100), help='Numero de epocas')
+    parser.add_argument('--batch', type=int, default=TRAINING_CONFIG.get("batch_size", 384), help='Tamanho do batch')
+    parser.add_argument('--lr', type=float, default=TRAINING_CONFIG.get("learning_rate", 1e-4), help='Learning rate')
     parser.add_argument('--dagger', action='store_true', help='Executar DAgger apos treino')
-    parser.add_argument('--device', type=str, default=None, help="'cuda' ou 'cpu'")
+    parser.add_argument("--device", type=str, default="cuda", help="Device para treinamento (cuda/cpu)")
+    parser.add_argument("--model_path", type=str, default=None, help="Caminho para modelo (.zip) pre-treinado (Transfer Learning)")
     
     args = parser.parse_args()
     
@@ -346,55 +372,55 @@ Exemplos:
     device = args.device or check_cuda()
     print(f"\n[CONFIG] Epocas: {args.epochs}, Batch: {args.batch}, LR: {args.lr}, Device: {device}")
     
-    # ===== CONFIGURACAO DO JOGO =====
-    config = {
-        "process_name": "re9",  # ALTERE PARA O SEU JOGO!
-        "exe_path": None,
-        "capture": {
-            "width": 854,
-            "height": 480,
-            "internal_width": 128,
-            "internal_height": 128,
-            "target_fps": 240,
-        },
-        "window_offset": {"left": 20, "top": 100, "right": 0, "bottom": 0},
-        "actions": {"num_actions": 18},
-    }
+    # ===== CONFIGURACAO DO MLFLOW =====
+    mlflow.set_tracking_uri("file:../mlruns")
+    mlflow.set_experiment("Hajime_no_Ippo_Imitation_Learning")
     
-    try:
-        # ===== PASSO 1: CARREGAR DADOS =====
-        data_manager = DataManager(demo_path='./demos/')
-        trajectories = data_manager.load_demos(verbose=True)
-        data_manager.describe_actions()
+    with mlflow.start_run(run_name="BC_Training") as run:
+        # Registrar hiperparametros
+        mlflow.log_param("epochs", args.epochs)
+        mlflow.log_param("batch_size", args.batch)
+        mlflow.log_param("learning_rate", args.lr)
+        mlflow.log_param("device", str(device))
+        mlflow.log_param("model_type", "imitation_learning_bc")
         
-        # ===== PASSO 2: CONFIGURAR TREINADOR =====
-        trainer = Trainer(
-            config=config,
-            device=device,
-            learning_rate=args.lr,
-            batch_size=args.batch,
-            epochs=args.epochs
-        )
-        
-        # ===== PASSO 3: TREINAR =====
-        trainer.setup_bc_trainer(trajectories)
-        trained_policy = trainer.train(save_path='./models/')
-        
-        # ===== PASSO 4: (OPCIONAL) DAGGER =====
-        if args.dagger:
-            run_dagger_iteration(config, './models/bc_policy.zip')
-        
-        print_header("TREINAMENTO CONCLUIDO")
-        print("Proximos passos:")
-        print("  1. Teste o modelo: python run_ai.py")
-        print("  2. Se precisar melhorar, use DAGGER: imitation-hg-dagger.ipynb")
-        print("  3. Quando satisfeito, use o modelo final para jogar automaticamente!")
-        
-    except Exception as e:
-        print(f"\n[ERRO] Falha no treinamento: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        try:
+            # ===== PASSO 1: CARREGAR DADOS =====
+            data_manager = DataManager(demo_path='./demos/')
+            trajectories = data_manager.load_demos(verbose=True)
+            data_manager.describe_actions()
+            
+            # ===== PASSO 2: CONFIGURAR TREINADOR =====
+            trainer = Trainer(
+                config=GAME_CONFIG,
+                device=device,
+                learning_rate=args.lr,
+                batch_size=args.batch,
+                epochs=args.epochs
+            )
+            
+            # ===== PASSO 3: TREINAR =====
+            trainer.setup_bc_trainer(trajectories, model_path=args.model_path)
+            trained_policy = trainer.train(save_path='./models/')
+            
+            # Registrar artefatos
+            mlflow.log_artifact('./models/bc_policy.zip', artifact_path="model")
+            
+            # ===== PASSO 4: (OPCIONAL) DAGGER =====
+            if args.dagger:
+                run_dagger_iteration(GAME_CONFIG, './models/bc_policy.zip')
+            
+            print_header("TREINAMENTO CONCLUIDO")
+            print("Proximos passos:")
+            print("  1. Teste o modelo: python run_ai.py")
+            print("  2. Se precisar melhorar, use DAGGER: imitation-hg-dagger.ipynb")
+            print("  3. Quando satisfeito, use o modelo final para jogar automaticamente!")
+            
+        except Exception as e:
+            print(f"\n[ERRO] Falha no treinamento: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
 
 
 if __name__ == "__main__":

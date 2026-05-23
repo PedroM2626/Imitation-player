@@ -6,6 +6,7 @@ Adaptado de running-imitation-lstm.ipynb para ser generico.
 import sys
 import os
 
+sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../utils"))
 
 import time
@@ -17,10 +18,11 @@ import threading
 import torch as th
 import gymnasium as gym
 from stable_baselines3.common.atari_wrappers import WarpFrame
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage, VecFrameStack
 from stable_baselines3.common.policies import ActorCriticPolicy
 from game_env import GenericGameEnv
 from utils import get_last_index, LSTMWrapper
+from config.game_config import GAME_CONFIG
 
 
 # --- CONFIGURACAO ---
@@ -99,15 +101,26 @@ class AIPlayer:
         
     def load_latest_model(self):
         """Carrega o modelo mais recente do diretorio de modelos."""
-        last_idx = get_last_index(self.model_path, "bc_policy", ".zip")
-        if last_idx < 0:
-            print("No trained models found!")
-            return False
-        
-        model_file = os.path.join(self.model_path, f"bc_policy{last_idx}.zip")
-        print(f"Loading model: {model_file}")
-        
-        self.policy = ActorCriticPolicy.load(model_file)
+        # 1. Tentar carregar o modelo principal bc_policy.zip na raiz de models ou do path de steps
+        main_model_file = os.path.join(os.path.dirname(self.model_path), "bc_policy.zip")
+        if not os.path.exists(main_model_file):
+            main_model_file = os.path.join(self.model_path, "bc_policy.zip")
+            
+        if os.path.exists(main_model_file):
+            print(f"Loading main model: {main_model_file}")
+            self.policy = ActorCriticPolicy.load(main_model_file, device=self.device)
+            self.current_epoch = "final"
+        else:
+            # Fallback para o get_last_index
+            last_idx = get_last_index(self.model_path, "bc_policy", ".zip")
+            if last_idx < 0:
+                print("No trained models found!")
+                return False
+            
+            model_file = os.path.join(self.model_path, f"bc_policy{last_idx}.zip")
+            print(f"Loading checkpoint model: {model_file}")
+            self.policy = ActorCriticPolicy.load(model_file, device=self.device)
+            self.current_epoch = last_idx
         
         # Verificar se tem LSTM e envolver o wrapper
         has_lstm = (hasattr(self.policy, 'lstm') or 
@@ -119,7 +132,6 @@ class AIPlayer:
             self.policy.reset()
             print("LSTM model loaded")
         
-        self.current_epoch = last_idx
         return True
     
     def play(self, manual_mode=False, max_steps=None):
@@ -178,8 +190,14 @@ class AIPlayer:
                 # Atualizar renderer
                 status = "AI ACTIVE" if ai_active else "MANUAL"
                 color = (0, 255, 0) if ai_active else (0, 0, 255)
-                renderer.update_data(obs[0, :, :, -1] if obs is not None else np.zeros((128, 128)), 
-                                    status, color, actual_fps, self.current_epoch)
+                if obs is not None:
+                    # obs[0] has shape (12, W, H). The last 3 channels are the current RGB frame.
+                    frame_rgb = np.transpose(obs[0, -3:, :, :], (1, 2, 0)).astype(np.uint8)
+                    frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                else:
+                    w, h = self.env.observation_space.shape[1:]
+                    frame_bgr = np.zeros((w, h, 3), dtype=np.uint8)
+                renderer.update_data(frame_bgr, status, color, actual_fps, self.current_epoch)
                 
                 # FPS counter
                 fps_count += 1
@@ -200,27 +218,11 @@ class AIPlayer:
 
 
 def main():
-    # Configuracao do jogo (AJUSTE AQUI PARA SEU JOGO)
-    config = {
-        "process_name": "rpcs3",  # Ex:"rpcs3" (PS3), "pcsx2" (PS2), "dolphin" (Wii)
-        "exe_path": None,
-        "capture": {
-            "width": 854,
-            "height": 480,
-            "internal_width": 128,
-            "internal_height": 128,
-            "target_fps": 240,
-        },
-        "window_offset": {"left": 20, "top": 100, "right": 0, "bottom": 0},
-    }
-    
     # Criar ambiente
-    def make_env():
-        def _init():
-            return GenericGameEnv(config)
-        return _init
-    
-    env = make_vec_env(make_env(), n_envs=1, vec_env_cls=DummyVecEnv)
+    env = GenericGameEnv(GAME_CONFIG)
+    env = DummyVecEnv([lambda: env])
+    env = VecTransposeImage(env)
+    env = VecFrameStack(env, n_stack=4)
     env.reset()
     
     # Criar player e carregar modelo

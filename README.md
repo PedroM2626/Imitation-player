@@ -69,19 +69,10 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 
 ### 2. Configurar o Jogo
 
-Edite `config/game_config.py`:
-
-```python
-GAME_CONFIG = {
-    "process_name": "rpcs3",  # <-- nome do processo do emulador/jogo
-    "exe_path": None,         # <-- deixe None se o jogo ja estiver aberto
-    "capture": {
-        "width": 854,
-        "height": 480,
-    },
-    # ... restante
-}
-```
+O jogo já está configurado de acordo com o seu sistema no arquivo `config/game_config.py`:
+- **Processo**: `rpcs3`
+- **Emulador (exe_path)**: `D:\emuladores\rpcs3-v0.0.39-18737-818b11fd_win64_msvc\rpcs3.exe`
+- **ROM (rom_path)**: `D:\roms\Hajime no Ippo - The Fighting! (Japan).iso`
 
 **Para emuladores:**
 - **RPCS3 (PS3)**: `process_name="rpcs3"`, abra o jogo antes de iniciar

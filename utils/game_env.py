@@ -41,19 +41,30 @@ class GenericGameEnv(gym.Env):
         
         # Configuracoes
         if config is None:
-            config = {
-                "process_name": "re9",
-                "exe_path": None,
-                "capture": {
-                    "width": 854,
-                    "height": 480,
-                    "internal_width": 128,
-                    "internal_height": 128,
-                    "target_fps": 240,
-                    "buffer_len": 1,
-                },
-                "window_offset": {"left": 20, "top": 100, "right": 0, "bottom": 0},
-            }
+            try:
+                import sys
+                import os
+                # Add parent dir to sys.path to resolve config
+                parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+                if parent_dir not in sys.path:
+                    sys.path.insert(0, parent_dir)
+                from config.game_config import GAME_CONFIG
+                config = GAME_CONFIG
+            except Exception as e:
+                print(f"Warning: Could not load config.game_config: {e}")
+                config = {
+                    "process_name": "rpcs3",
+                    "exe_path": None,
+                    "capture": {
+                        "width": 854,
+                        "height": 480,
+                        "internal_width": 128,
+                        "internal_height": 128,
+                        "target_fps": 240,
+                        "buffer_len": 1,
+                    },
+                    "window_offset": {"left": 20, "top": 100, "right": 0, "bottom": 0},
+                }
         
         self.config = config
         self.process_name = config.get("process_name", "re9")
@@ -72,28 +83,9 @@ class GenericGameEnv(gym.Env):
         # Offsets da janela
         self.win_off = config.get("window_offset", {"left": 20, "top": 100, "right": 0, "bottom": 0})
         
-        # Encontrar/Abrir o jogo
-        self.hwnd = self.find_window_by_process_name(self.process_name)
-        self.pid = None
-        
-        if not self.hwnd and self.exe_path:
-            process = subprocess.Popen([self.exe_path])
-            self.pid = process.pid
-        
-        self.wait_start()
-        
-        # Gamepad virtual (DualShock 4)
-        self.gamepad = vg.VDS4Gamepad()
-        self.prev_keys = set()
-        
         # Espaco de acoes (18 acoes binarias por padrao)
         self.num_actions = config.get("actions", {}).get("num_actions", 18)
         self.action_space = gym.spaces.MultiBinary(self.num_actions)
-        
-        # Camera (captura de tela acelerada por GPU)
-        self.camera = dxcam.create(output_color="RGB", max_buffer_len=self.buffer_len)
-        self.region = self._get_window_region()
-        self.camera.start(region=self.region, target_fps=self.target_fps)
         
         # Espaco de observacao (imagem RGB)
         self.observation_space = gym.spaces.Box(
@@ -102,6 +94,49 @@ class GenericGameEnv(gym.Env):
             shape=(self.internal_height, self.internal_width, 3),
             dtype=np.uint8,
         )
+        
+        self.dummy = config.get("dummy", False)
+        if self.dummy:
+            self.hwnd = None
+            self.pid = None
+            self.img = None
+            self.frame_time = 1.0 / self.target_fps
+            return
+            
+        # Encontrar/Abrir o jogo
+        self.hwnd = self.find_window_by_process_name(self.process_name)
+        self.pid = None
+        
+        if not self.hwnd and self.exe_path:
+            cmd = [self.exe_path]
+            rom_path = self.config.get("rom_path")
+            if rom_path:
+                cmd.append(rom_path)
+            print(f"Launching process: {cmd}")
+            process = subprocess.Popen(cmd)
+            self.pid = process.pid
+        
+        self.wait_start()
+        
+        # Gamepad virtual (Xbox 360 / XInput)
+        self.gamepad = vg.VX360Gamepad()
+        self.prev_keys = set()
+        
+        # Camera (captura de tela acelerada por GPU)
+        self.camera = None
+        self.mss_sct = None
+        try:
+            self.camera = dxcam.create(output_color="RGB", max_buffer_len=self.buffer_len)
+            self.region = self._get_window_region()
+            self.camera.start(region=self.region, target_fps=self.target_fps)
+        except Exception as e:
+            print("\n" + "="*80)
+            print("WARNING: DXCam failed to initialize. Falling back to mss.")
+            print("This usually happens on laptops with dual GPUs.")
+            print("="*80 + "\n")
+            self.camera = None
+            import mss
+            self.mss_sct = mss.mss()
         
         self.img = None
         self.frame_time = 1.0 / self.target_fps
@@ -157,11 +192,11 @@ class GenericGameEnv(gym.Env):
         
         # Botoes de face
         if actions[4] > 0:
-            current.add(vg.DS4_BUTTONS.DS4_BUTTON_CROSS)
+            current.add(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
         if actions[5] > 0:
-            current.add(vg.DS4_BUTTONS.DS4_BUTTON_CIRCLE)
+            current.add(vg.XUSB_BUTTON.XUSB_GAMEPAD_B)
         if actions[6] > 0:
-            current.add(vg.DS4_BUTTONS.DS4_BUTTON_SQUARE)
+            current.add(vg.XUSB_BUTTON.XUSB_GAMEPAD_X)
         
         # Triggers
         if abs(actions[7]) > 0:
@@ -171,7 +206,7 @@ class GenericGameEnv(gym.Env):
         
         # L3
         if actions[9] > 0:
-            current.add(vg.DS4_BUTTONS.DS4_BUTTON_THUMB_LEFT)
+            current.add(vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB)
         
         # Stick Direito X (camera)
         if np.any(actions[10:14] == 1):
@@ -225,14 +260,25 @@ class GenericGameEnv(gym.Env):
     
     def _get_observation(self) -> np.ndarray:
         """Captura a tela do jogo e redimensiona."""
-        frame = self.camera.get_latest_frame()
+        frame = None
+        if self.camera is not None:
+            frame = self.camera.get_latest_frame()
+        elif self.mss_sct is not None:
+            left, top, right, bot = self._get_window_region()
+            monitor = {"top": top, "left": left, "width": right - left, "height": bot - top}
+            try:
+                sct_img = self.mss_sct.grab(monitor)
+                frame = cv2.cvtColor(np.array(sct_img), cv2.COLOR_BGRA2RGB)
+            except Exception:
+                frame = None
+
         if frame is None:
             return self.img if self.img is not None else np.zeros(
                 (self.internal_height, self.internal_width, 3), dtype=np.uint8
             )
         
         self.img = frame
-        return cv2.resize(frame, (self.internal_width, self.internal_width), interpolation=cv2.INTER_NEAREST)
+        return cv2.resize(frame, (self.internal_width, self.internal_height), interpolation=cv2.INTER_NEAREST)
     
     def find_window_by_process_name(self, process_name: str) -> Optional[int]:
         """Encontra a janela do jogo pelo nome do processo."""

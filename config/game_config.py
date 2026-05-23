@@ -16,7 +16,10 @@ GAME_CONFIG = {
     # Caminho para o executavel do jogo (opcional - deixe None se ja estiver aberto)
     # Exemplo: R"C:\Games\RPCS3\rpcs3.exe"
     # Ou para Steam: R"C:\Program Files (x86)\Steam\steam.exe -applaunch APPID"
-    "exe_path": None,  # R"C:\Caminho\Para\rpcs3.exe" ou None
+    "exe_path": R"D:\emuladores\rpcs3-v0.0.39-18737-818b11fd_win64_msvc\rpcs3.exe",
+    
+    # Caminho para a ROM do jogo
+    "rom_path": R"D:\roms\Hajime no Ippo - The Fighting! (Japan).iso",
     
     # Configuracoes da captura de tela
     "capture": {
@@ -24,8 +27,8 @@ GAME_CONFIG = {
         # O modelo usa 128x128 internamente, mas essa e a resolucao bruta capturada
         "width": 854,       # Largura da captura (ex: 854 para 480p, 1280 para 720p)
         "height": 480,      # Altura da captura
-        "internal_width": 128,   # Resolucao que o modelo processa (nao alterar)
-        "internal_height": 128,  # Resolucao que o modelo processa (nao alterar)
+        "internal_width": 64,    # Resolucao que o modelo processa (64x64 para evitar MemoryError)
+        "internal_height": 64,   # Resolucao que o modelo processa (64x64 para evitar MemoryError)
         "target_fps": 240,       # FPS alvo da captura
         "buffer_len": 1,         # Buffer do DXCam (1 = mais rapido, 3 = mais suave)
     },
@@ -90,8 +93,8 @@ GAME_CONFIG = {
 # ==============================================
 
 TRAINING_CONFIG = {
-    # numero maximo de trajetorias por sessao de gravacao
-    "max_trajectories": 10,
+    # numero maximo de trajetorias por sessao de gravacao (limite baixo para evitar MemoryError ao salvar)
+    "max_trajectories": 3,
     
     # tamanho do batch para treinamento
     "batch_size": 384,
