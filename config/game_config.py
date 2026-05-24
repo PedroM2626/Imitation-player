@@ -27,9 +27,9 @@ GAME_CONFIG = {
         # O modelo usa 128x128 internamente, mas essa e a resolucao bruta capturada
         "width": 854,       # Largura da captura (ex: 854 para 480p, 1280 para 720p)
         "height": 480,      # Altura da captura
-        "internal_width": 64,    # Resolucao que o modelo processa (64x64 para evitar MemoryError)
-        "internal_height": 64,   # Resolucao que o modelo processa (64x64 para evitar MemoryError)
-        "target_fps": 240,       # FPS alvo da captura
+        "internal_width": 128,    # Resolucao que o modelo processa
+        "internal_height": 128,   # Resolucao que o modelo processa
+        "target_fps": 60,       # FPS alvo da captura
         "buffer_len": 1,         # Buffer do DXCam (1 = mais rapido, 3 = mais suave)
     },
     

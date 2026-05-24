@@ -128,7 +128,7 @@ class DataManager:
             )
         
         # Encontrar todos os arquivos de demo
-        demo_files = sorted(self.demo_path.glob('demos*.pt'))
+        demo_files = sorted(self.demo_path.glob('demo*.pt'))
         
         if not demo_files:
             raise FileNotFoundError(
@@ -230,13 +230,15 @@ class Trainer:
                  device: str = 'cuda',
                  learning_rate: float = 1e-4,
                  batch_size: int = 384,
-                 epochs: int = 100):
+                 epochs: int = 100,
+                 model_save_path: str = './models/'):
         
         self.config = config
         self.device = th.device(device)
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epochs = epochs
+        self.model_save_path = model_save_path
         
         # Ambiente para as politicas do SB3
         self.env = self._create_env()

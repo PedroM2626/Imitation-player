@@ -191,11 +191,11 @@ class AIPlayer:
                 status = "AI ACTIVE" if ai_active else "MANUAL"
                 color = (0, 255, 0) if ai_active else (0, 0, 255)
                 if obs is not None:
-                    # obs[0] has shape (12, W, H). The last 3 channels are the current RGB frame.
-                    frame_rgb = np.transpose(obs[0, -3:, :, :], (1, 2, 0)).astype(np.uint8)
-                    frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                    # obs[0] has shape (4, W, H). The last channel is the current GRAY frame.
+                    frame_gray = obs[0, -1, :, :].copy().astype(np.uint8)
+                    frame_bgr = cv2.cvtColor(frame_gray, cv2.COLOR_GRAY2BGR)
                 else:
-                    w, h = self.env.observation_space.shape[1:]
+                    w, h = self.env.observation_space.shape[0], self.env.observation_space.shape[1]
                     frame_bgr = np.zeros((w, h, 3), dtype=np.uint8)
                 renderer.update_data(frame_bgr, status, color, actual_fps, self.current_epoch)
                 

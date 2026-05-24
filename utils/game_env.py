@@ -87,11 +87,11 @@ class GenericGameEnv(gym.Env):
         self.num_actions = config.get("actions", {}).get("num_actions", 18)
         self.action_space = gym.spaces.MultiBinary(self.num_actions)
         
-        # Espaco de observacao (imagem RGB)
+        # Espaco de observacao (imagem Grayscale)
         self.observation_space = gym.spaces.Box(
             low=0,
             high=255,
-            shape=(self.internal_height, self.internal_width, 3),
+            shape=(self.internal_height, self.internal_width, 1),
             dtype=np.uint8,
         )
         
@@ -126,7 +126,7 @@ class GenericGameEnv(gym.Env):
         self.camera = None
         self.mss_sct = None
         try:
-            self.camera = dxcam.create(output_color="RGB", max_buffer_len=self.buffer_len)
+            self.camera = dxcam.create(output_color="GRAY", max_buffer_len=self.buffer_len)
             self.region = self._get_window_region()
             self.camera.start(region=self.region, target_fps=self.target_fps)
         except Exception as e:
@@ -268,17 +268,20 @@ class GenericGameEnv(gym.Env):
             monitor = {"top": top, "left": left, "width": right - left, "height": bot - top}
             try:
                 sct_img = self.mss_sct.grab(monitor)
-                frame = cv2.cvtColor(np.array(sct_img), cv2.COLOR_BGRA2RGB)
+                frame = cv2.cvtColor(np.array(sct_img), cv2.COLOR_BGRA2GRAY)
             except Exception:
                 frame = None
 
         if frame is None:
             return self.img if self.img is not None else np.zeros(
-                (self.internal_height, self.internal_width, 3), dtype=np.uint8
+                (self.internal_height, self.internal_width, 1), dtype=np.uint8
             )
         
-        self.img = frame
-        return cv2.resize(frame, (self.internal_width, self.internal_height), interpolation=cv2.INTER_NEAREST)
+        resized = cv2.resize(frame, (self.internal_width, self.internal_height), interpolation=cv2.INTER_NEAREST)
+        if len(resized.shape) == 2:
+            resized = np.expand_dims(resized, axis=-1)
+        self.img = resized
+        return resized
     
     def find_window_by_process_name(self, process_name: str) -> Optional[int]:
         """Encontra a janela do jogo pelo nome do processo."""

@@ -60,7 +60,7 @@ class DataManager:
     
     def load_demos(self) -> List[Trajectory]:
         print_header("1. CARREGANDO DADOS (GABARITO HUMANO)")
-        demo_files = sorted(glob.glob(os.path.join(self.demo_path, 'demos*.pt')))
+        demo_files = sorted(glob.glob(os.path.join(self.demo_path, 'demo*.pt')))
         
         if not demo_files:
             raise FileNotFoundError(f"Nenhum arquivo de demo encontrado em {self.demo_path}")

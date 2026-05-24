@@ -116,7 +116,9 @@ class TrajectoryRecorder:
             
             # XInput (Global Background Controller Capture)
             if hasattr(self, 'xinput') and self.xinput:
-                for j_idx in range(4):
+                # Ler apenas o controle fisico (Slot 0) para evitar o feedback loop 
+                # de ler as teclas pressionadas no proprio controle virtual da IA
+                for j_idx in range(1):
                     state = self.XINPUT_STATE()
                     if self.xinput.XInputGetState(j_idx, ctypes.byref(state)) == 0:
                         buttons = state.Gamepad.wButtons
@@ -145,20 +147,16 @@ class TrajectoryRecorder:
             
             # Renderizar
             if obs is not None:
-                # Selecionar o frame mais recente (o ultimo no stack)
-                # Como VecTransposeImage converte para (C, H, W) e VecFrameStack empilha no canal,
-                # o formato e (12, 84, 84). Os ultimos 3 canais sao o frame RGB atual.
-                img_rgb = obs[0, -3:, :, :]
-                img_rgb = np.transpose(img_rgb, (1, 2, 0)) # (84, 84, 3)
+                # O formato e (4, 84, 84). O ultimo canal e o frame GRAY atual.
+                img_gray = obs[0, -1, :, :].copy()
+                img_rgb = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2RGB).astype(np.uint8)
                 
                 img_resized = cv2.resize(img_rgb, (self.screen_width, self.screen_height), 
                                         interpolation=cv2.INTER_NEAREST)
                 color = (0, 255, 0) if is_running else (0, 0, 255)
                 
-                # Converter para pygame surface
-                surface = pygame.image.frombuffer(img_resized.flatten(), 
-                                                  (self.screen_width, self.screen_height), 'RGB')
-                
+                # Usar surfarray igual ao run_ai.py para evitar bugs de flatten() com cores
+                surface = pygame.surfarray.make_surface(img_resized.swapaxes(0, 1))
                 window.blit(surface, (0, 0))
                 
                 # Texto de status
@@ -184,13 +182,19 @@ class TrajectoryRecorder:
                 self.recorded_actions.append(action.copy())
                 self.is_recording = True
             elif self.is_recording:
-                print(f"Finish trajectory {self.count_record}")
+                print(f"Finalizando trajetoria {self.count_record}...")
                 obs_uint8 = np.stack([o.astype(np.uint8) for o in self.recorded_obs], axis=0)
-                print(f"Trajectory shape: {obs_uint8.shape}")
-                self.trajectories.append(
-                    Trajectory(obs=obs_uint8, acts=np.array(self.recorded_actions), 
-                              infos=None, terminal=False)
-                )
+                traj = Trajectory(obs=obs_uint8, acts=np.array(self.recorded_actions), 
+                                  infos=None, terminal=False)
+                
+                # Salvar a trajetoria em arquivo individual
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                save_file = os.path.join(self.demo_path, f"demo_{self.count_record}_{timestamp}.pt")
+                th.save([traj], save_file)
+                print(f"[OK] Trajetoria salva com sucesso em: {save_file}")
+                
+                # Contabilizar e limpar a memoria
+                self.trajectories.append(traj) # Adiciona so pra contagem do laco principal
                 self.recorded_obs, self.recorded_actions = [], []
                 self.count_record += 1
                 self.is_recording = False
@@ -224,15 +228,8 @@ def main():
     except KeyboardInterrupt:
         print("\nProcess interrupted by user (Ctrl+C).")
     finally:
-        # Garante que as trajetorias sejam salvas mesmo se o script for abortado (Ctrl+C)
-        if len(recorder.trajectories) > 0:
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            print(f"\nSaving {len(recorder.trajectories)} trajectories to file...")
-            save_file = os.path.join(recorder.demo_path, f"demos_{len(recorder.trajectories)}_{timestamp}.pt")
-            th.save(recorder.trajectories, save_file)
-            print(f"Save completed at: {save_file}")
-        else:
-            print("\nNo complete trajectories were recorded. Nothing to save.")
+        # As trajetorias ja sao salvas iterativamente! Nao precisa salvar no finally
+        print("\nProcesso de gravacao concluido.")
         
         try:
             pygame.quit()
