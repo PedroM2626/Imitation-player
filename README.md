@@ -1,259 +1,118 @@
-# AI Game Agent - Imitation Learning para Qualquer Jogo
+# Imitation Player - Hajime no Ippo
 
-Projeto baseado no `re_requiem` de [@paulo101977](https://github.com/paulo101977/notebooks-rl), 
-adaptado para ser generico e funcionar com qualquer jogo de PC ou emulador.
-
----
-
-## O que este projeto faz?
-
-Este projeto permite que voce crie uma **IA que aprende a jogar qualquer jogo vendo voce jogar**. 
-A IA observa a tela do jogo e aprende a mapear "o que vejo" em "oque aperto no controle".
-
-### Fluxograma do processo:
-
-```
-+------------------+    +-------------------+    +-------------------+
-|  1. VOCE JOGA    | -> | 2. GRAVA TUDO     | -> | 3. IA APRENDE     |
-|  (controle real) |    | (tela + botoes)   |    | (CNN+LSTM+Attn)   |
-+------------------+    +-------------------+    +-------------------+
-                                                           |
-+------------------+    +-------------------+              v
-|  6. CORRIGE/     | <- | 5. IA JOGA SOZIN. | <- | 4. VERIFICA       |
-|     REFINA       |    | (gamepad virtual)   |    | (testa no jogo)   |
-+------------------+    +-------------------+    +-------------------+
-```
-
-### Tecnologias:
-- **CV**: `dxcam` (captura de tela acelerada por GPU)
-- **Controle**: `vgamepad` (DualShock 4 virtual)
-- **AI**: `stable-baselines3`, `imitacao` (Hugging Face)
-- **LSTM**: Redes com memoria temporal para entender sequencias de frames
-- **Atencao**: Foco automatico nos elementos relevantes da tela
+Este projeto implementa um agente de inteligência artificial que aprende a jogar **Hajime no Ippo - The Fighting! (PS3)** via aprendizado por imitação (Behavioral Cloning e DAgger), utilizando capturas de tela aceleradas por GPU (via `dxcam`) e comandos virtuais (via `vgamepad`).
 
 ---
 
-## Estrutura do Projeto
+## Estrutura do Workspace
 
-```
-hajime_agent/
-    config/
-        game_config.py          # Configure seu jogo aqui
-    utils/
-        game_env.py             # Ambiente generico (captura + controle)
-        utils.py                # Funcoes auxiliares (LSTMWrapper, etc.)
-    notebooks/
-        record_trajectories.py  # Grava voce jogando
-        train_imitation.py       # Treina a IA
-        run_ai.py               # Faz a IA jogar sozinha
-    demos/                      # Onde as trajetorias sao salvas
-    models/                     # Onde os modelos treinados sao salvos
-```
+- `hajime_agent/`: Diretório do agente contendo as configurações de captura, mapeamento de botões e modelos de IA.
+- `venv/`: Ambiente virtual Python 3.11.9 do projeto com todas as dependências instaladas.
+- `requirements.txt`: Dependências exatas do projeto.
+- `Dockerfile`: Especificação para execução do ambiente de treino em contêineres Docker.
 
 ---
 
-## Como Usar (Passo a Passo)
+## Configuração do Sistema
 
-### 1. Instalacao
+As configurações principais do sistema do usuário foram unificadas no arquivo central de configurações: [game_config.py](file:///d:/Imitation-player/hajime_agent/config/game_config.py).
 
-```bash
-# Clone o repositorio
-git clone https://github.com/paulo101977/notebooks-rl.git
-
-# Instale as dependencias
-pip install gymnasium stable-baselines3 numpy pygame dxcam imitacao vgamepad opencv-python torch psutil inputs keyboard
-
-# Para GPU NVIDIA (opcional, mas RECOMENDADO)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
-
-### 2. Configurar o Jogo
-
-O jogo já está configurado de acordo com o seu sistema no arquivo `config/game_config.py`:
-- **Processo**: `rpcs3`
-- **Emulador (exe_path)**: `D:\emuladores\rpcs3-v0.0.39-18737-818b11fd_win64_msvc\rpcs3.exe`
-- **ROM (rom_path)**: `D:\roms\Hajime no Ippo - The Fighting! (Japan).iso`
-
-**Para emuladores:**
-- **RPCS3 (PS3)**: `process_name="rpcs3"`, abra o jogo antes de iniciar
-- **PCSX2 (PS2)**: `process_name="pcsx2-qt"`
-- **Dolphin (Wii/GC)**: `process_name="dolphin"`
-- **Jogo de PC**: nome do .exe (ex: "re9")
-
-### 3. Gravar Trajetorias Humanas
-
-Rode o script de gravacao:
-```bash
-cd notebooks
-python record_trajectories.py
-```
-
-- Abra o emulador/jogo
-- O script capturara a tela
-- **Pressione `K`** para comecar/parar de gravar
-- Jogue normalmente com o controle/teclado
-- Grave pelo menos **10 trajetorias** (mais = melhor!)
-
-As trajetorias sao salvas em `demos/demosX.pt`.
-
-### 4. Treinar a IA
-
-```bash
-python train_imitation.py
-```
-
-- Ajuste `epochs`, `batch_size` e outras configs
-- O modelo sera salvo em `models/bc_policy.zip`
-
-### 5. Fazer a IA Jogar
-
-```bash
-python run_ai.py
-```
-
-- **Pressione `K`** para ativar/desativar a IA
-- **Pressione `ESC`** para sair
-- A IA controla o jogo sozinha via gamepad virtual!
-
-### 6. (Opcional) Refinar com DAGGER
-
-Execute o notebook `imitation-hg-dagger.ipynb` (ou adapte):
-1. A IA joga
-2. Voce corrige quando ela erra
-3. Gera mais trajetorias corrigidas
-4. Retreina com dados novos
-5. Repita ate ficar boa!
+Configurações ativas:
+- **Executável do Emulador**: `D:\emuladores\rpcs3-v0.0.39-18737-818b11fd_win64_msvc\rpcs3.exe`
+- **Caminho da ROM**: `D:\roms\Hajime no Ippo - The Fighting! (Japan).iso`
+- **Ambiente Virtual**: Configurado em `venv/` usando Python 3.11.9.
 
 ---
 
-## Adaptando para seu Jogo Especifico
+## Como Gravar as Trajetórias Humana
 
-### Mapeamento de Acoes
+Siga o passo a passo abaixo para gravar suas gameplays:
 
-No `game_env.py`, edite a funcao `step` para mapear as acoes corretamente.
+1. **Configurar o RPCS3**:
+   - Abra o RPCS3 manualmente pela primeira vez.
+   - Certifique-se de configurar as opções de controle (Pads). O mapeamento deve apontar para o gamepad virtual gerado pelo `vgamepad` (normalmente reconhecido como controle de Xbox/DualShock pelo Windows).
 
-Exemplo para **Hajime no Ippo (PS3)** - jogo de boxe:
-```
-Acoes necessarias:
-- Esquerda/Direita (movimento ring)
-- Cima/Baixo (esquivas/bloqueios)  
-- X (jab rapido esquerda)
-- Circulo (direto direita)
-- Quadrado (gancho esquerda)
-- Triangulo (uppercut)
-- L2 (bloquear)
-- R2 (especial/fervor)
-- L3 (movimento de pes)
-- Stick Direito: camera/movimento corpo
-```
+2. **Iniciar o Gravador**:
+   - Abra um terminal no diretório raiz do projeto e ative o ambiente virtual:
+     ```powershell
+     .\venv\Scripts\Activate.ps1
+     ```
+   - Navegue para o diretório de notebooks e execute o script de gravação:
+     ```powershell
+     cd hajime_agent/notebooks
+     python record_trajectories.py
+     ```
+   - O emulador RPCS3 será iniciado automaticamente e carregará a ROM do jogo caso ele ainda não esteja aberto.
 
-### Dicas para Jogos de Luta (como Hajime no Ippo):
-
-1. **Timing e Frame Data**: Atraso de 50-100ms pode ser critico para combos frame-perfect. 
-   Ajuste `target_fps` para capturar mais frames por segundo.
-
-2. **Diversidade**: Grave contra varios oponentes em diferentes estagios.
-   A IA precisa ver muitas situacoes diferentes para generalizar.
-
-3. **Teoria de Jogos**: Jogos de luta sao adversariais (o oponente reage as sua acoes).
-   DAGGER e essencial, pois a IA inicial so joga bem contra os dados de treino.
-
-4. **Observabilidade**: A IA so ve a tela. Se ela precisar saber a vida de ambos 
-   os lutadores, isso deve estar visivel na tela (pas de HUD separado).
+3. **Gravar a Gameplay**:
+   - O script exibirá uma tela de visualização (preview).
+   - Coloque o jogo na tela de gameplay ativo (luta).
+   - **Pressione 'K'** no seu teclado para iniciar a gravação. O status mudará para **RECORDING**.
+   - Jogue utilizando seu controle convencional normalmente. Foque em movimentos variados (ataques, esquivas, bloqueios e combos).
+   - **Pressione 'K'** novamente para pausar a gravação de uma trajetória. Cada trajetória gravada será contabilizada na tela de preview.
+   - Repita o processo até completar o número mínimo de trajetórias (10-20 sugeridas).
+   - Ao fechar ou concluir as gravações, as trajetórias serão salvas automaticamente como arquivos `.pt` no diretório `hajime_agent/demos/`.
 
 ---
 
-## Arquitetura da Rede Neural
+## Treinamento e MLOps com MLflow
 
-```
-Imagem (128x128x1) -->
-[Conv2D] -- [BatchNorm] -- [ReLU] x5 -->
-[Flatten] -- (512 features) -->
-[LSTM Bidirectional] -- (cap. temporal: ultimos 10 frames) -->
-[Atencao Temporal] -- (foca nos frames mais importantes) -->
-[Linear 1024] -- [ReLU] -- [Dropout] -->
-[Linear 512] --> Acao predita (18 botoes)
-```
+O pipeline de treinamento está totalmente integrado com os princípios de MLOps utilizando o **MLflow**. Toda execução de treino gerará uma run com logs de hiperparâmetros, estatísticas dos datasets, perdas por época (`loss`) e o arquivo final do modelo.
 
-### Por que Atencao + LSTM?
+### Executando o Treinamento
 
-- **LSTM**: Permite a IA lembrar o que aconteceu nos ultimos 10 frames (ex: sequencia de combo,
-  posicao anterior no ring, movimento do oponente).
-
-- **Atencao Tempora**: O jogo nem todos os frames sao igualmente importantes. Ex: o frame 
-  exato do contra-ataque e mais importante que 2 segundos de neutral. A atencao da peso maior
-  para os frames mais relevantes.
-
----
-
-## Guia para Hajime no Ippo (PS3 via RPCS3)
-
-### Passo 1: Configuracao
-1. Instale o RPCS3 e o jogo
-2. Configure o controle no RPCS3 (XInput/DirectInput)
-3. Ajuste `config/game_config.py`:
-   ```python
-   GAME_CONFIG = {
-       "process_name": "rpcs3",
-       "exe_path": None,  # Abra o RPCS3 manualmente
-       "capture": {
-           "width": 1280,   # Resolucao interna do RPCS3
-           "height": 720,
-       },
-   }
+1. Execute o script de treinamento:
+   ```powershell
+   python train_agent.py --epochs 100 --batch 384 --lr 1e-4
    ```
 
-### Passo 2: Mapeamento de Botoes
-No `game_env.py`, `step()`:
-```python
-# Mapeamento para Hajime no Ippo
-# X = jab esquerda
-# O = direto direita  
-# [] = gancho esquerda
-# Tri = uppercut
-# L2 = bloquear
-# R2 = fervor/especial
+2. Visualizando experimentos no MLflow:
+   - Para abrir o painel de visualização do MLflow, execute:
+     ```powershell
+     mlflow ui --backend-store-uri file:../mlruns
+     ```
+   - Abra o navegador no endereço `http://localhost:5000` para acompanhar as métricas, comparar execuções e baixar modelos gerados.
+
+---
+
+## Execução via Docker (Treinamento)
+
+Como a captura de tela (`dxcam`) e os controles virtuais (`vgamepad`) requerem integração direta com o kernel do Windows, a gravação e a execução de jogo autônomo devem ser feitas no host Windows. Contudo, o treinamento dos modelos (que requer alto processamento gráfico) pode ser empacotado e rodado em qualquer ambiente Linux/NVIDIA Docker.
+
+### Construir a Imagem de Treino
+```bash
+docker build -t imitation-player-train .
 ```
 
-### Passo 3: Gravacao
-1. Abra o jogo no modo Carreira ou Amistoso
-2. Jogue contra um oponente especifico (para consistencia inicial)
-3. Faca movimentos basicos:
-   - Movimentar ring
-   - Esquivas
-   - Combos basicos (Jab -> Direto -> Gancho)
-   - Bloqueios e Contra-Ataques
-4. Grave pelo menos 15-20 trajetorias de 1 minuto cada
-
-### Passo 4: Treinamento
-- Inicial: 50 epochs (geral)
-- Dagger 1: +30 epochs (comecar a corrigir)
-- Dagger 2: +30 epochs (refinar)
-- Dagger 3+: +20 epochs (polir)
-
-### Passo 5: Teste
-- Veja a IA jogar
-- Anote os momentos que ela erra
-- Use o notebook `dagger` para corrigir esses momentos
-- Retreine e repita
+### Executar o Treino no Docker (com suporte à GPU)
+```bash
+docker run --gpus all -v $(pwd)/hajime_agent/demos:/app/hajime_agent/demos -v $(pwd)/hajime_agent/models:/app/hajime_agent/models imitation-player-train
+```
 
 ---
 
-## Solucao de Problemas
+## Como Testar o Agente
 
-| Problema | Solucao |
-|----------|---------|
-| "Window not found" | Abra o jogo ANTES de rodar o script; verifique o nome do processo |
-| Captura lenta/feia | Se for emulador, reduza a resolucao interna; deixe o jogo em tela cheia minimizado |
-| Delay na IA | Reduza `target_fps` para sincronizar; ou use GPU melhor |
-| IA so anda para os lados | Falta dados! Grave mais trajetorias com movimentos variados |
-| IA aperta botoes aleatorios | Treine por mais epochs; verifique se a loss esta decrescendo |
-| Gamepad nao funciona | Verifique se vgamepad esta instalado corretamente; teste gamepad virtual |
+Após concluir o treinamento e ter o arquivo `bc_policy.zip` salvo no diretório `models/`, siga os passos abaixo para testar o agente no jogo:
 
----
+1. **Preparar o Emulador e o Jogo**:
+   - Abra o RPCS3 e inicie o jogo **Hajime no Ippo - The Fighting!**.
+   - Navegue no jogo até entrar em uma luta ativa (onde o personagem possa se mover e lutar).
 
-## Licenca
+2. **Ativar o Ambiente Virtual e Rodar o Teste**:
+   - Abra um terminal no diretório raiz do projeto e execute:
+     ```powershell
+     .\venv\Scripts\Activate.ps1
+     cd hajime_agent/notebooks
+     python run_ai.py
+     ```
+   - O script procurará a janela ativa do emulador (`rpcs3`).
+   - Se o script falhar ao inicializar o `dxcam` (comum em laptops híbridos/dual-GPU), ele fará o **fallback automático para a biblioteca `mss`** e funcionará normalmente.
 
-Baseado no trabalho de [paulo101977](https://github.com/paulo101977/notebooks-rl).
-Este projeto foi adaptado para tornar o uso mais generico e acessivel.
+3. **Interagir com o Agente de IA**:
+   - Uma janela de visualização do Pygame será aberta, exibindo a tela redimensionada que a IA vê (128x128 ampliada para a janela 854x480).
+   - **Ativar/Desativar IA (Tecla 'K')**: Pressione a tecla **'K'** no teclado a qualquer momento para ligar ou desligar o controle da IA. 
+     - Quando ativa, o indicador no topo esquerdo ficará verde com o status **AI ACTIVE**, e a IA assumirá o controle do personagem.
+     - Quando inativa, o status será **MANUAL**, e você poderá controlar manualmente o personagem ou apenas observar o jogo livremente.
+   - **Sair do Teste (Tecla 'Esc')**: Pressione a tecla **'Esc'** a qualquer momento para encerrar o script de execução e fechar a visualização do Pygame.
 

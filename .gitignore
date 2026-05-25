@@ -1,3 +1,4 @@
 *mlruns*
 *pycache*
 *.pt
+venv/
