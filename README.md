@@ -142,6 +142,21 @@ Substitui a CNN inteira por um mecanismo de Self-Attention puro.
 - **Vantagem**: Pode capturar padrões complexos globais na tela.
 - **Desvantagem**: Mais pesada e demora mais para treinar.
 
+#### 📊 Benchmark Oficial de Comparação
+
+Resultados baseados no treinamento automático (10 épocas) usando o script `compare_models.py`:
+
+<!-- BENCHMARK_START -->
+| Métrica | NatureCNN (Padrão) | CNN + LSTM + Attention | Vision Transformer (ViT) |
+| :--- | :--- | :--- | :--- |
+| **Poder de Aprendizado (Loss Final)** | `3.47` *(Pior)* | `3.02` *(Ótimo)* | **`2.99`** *(Melhor)* |
+| **Tempo de Treinamento** | **18.3 segundos** | 67.8 segundos | 54 minutos *(Pesadíssimo)* |
+| **Peso do Arquivo Final** | 16.33 MB | 23.71 MB | **9.70 MB** *(O mais leve!)* |
+| **Quantidade de Parâmetros (Neurônios)** | 4.19 Milhões | 6.11 Milhões | **2.44 Milhões** *(Muito Eficiente)* |
+<!-- BENCHMARK_END -->
+
+**Conclusão**: O **ViT** é o mais inteligente e eficiente em arquitetura, gerando o modelo mais leve e preciso, mas ao custo de um treinamento muito demorado. O **CNN+LSTM** brilha no custo-benefício, treinando em menos de 2 minutos e garantindo precisão quase igual ao Transformer. A **NatureCNN** é ideal apenas para testes ultra-rápidos de debug.
+
 ### 4. Pipeline de Treinamento
 
 **Fase 1 - Gravação** (`record_trajectories.py`):
