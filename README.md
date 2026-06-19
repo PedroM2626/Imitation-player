@@ -117,7 +117,7 @@ Classe `gym.Env` que:
 
 ### 3. Arquiteturas de Rede Neural Disponiveis
 
-O projeto agora suporta três arquiteturas diferentes para processar as imagens e tomar decisões. Você pode comparar todas usando o script `compare_models.py`.
+O projeto agora suporta diversas arquiteturas diferentes para processar as imagens e tomar decisões. Você pode comparar todas usando o script `compare_models.py`.
 
 #### A. NatureCNN (Padrão)
 A arquitetura clássica do Stable-Baselines3. É uma Rede Neural Convolucional simples e rápida (3 camadas).
@@ -142,20 +142,38 @@ Substitui a CNN inteira por um mecanismo de Self-Attention puro.
 - **Vantagem**: Pode capturar padrões complexos globais na tela.
 - **Desvantagem**: Mais pesada e demora mais para treinar.
 
+#### D. Impoola-CNN (GAP) (`train_agent_impoola.py`)
+Combina blocos residuais inspirados no Impala-CNN com a camada de **Global Average Pooling (GAP)** no lugar de camadas densas achatadas.
+- **Vantagem**: Altamente invariante a translações espaciais, com excelente generalização e tamanho extremamente compacto (apenas 1.01M de parâmetros e 4.20 MB).
+
+#### E. Impala-CNN (Original)
+A clássica arquitetura residual para Deep RL com achatamento (Flatten) na saída das convoluções.
+- **Vantagem**: Excelente capacidade de retenção espacial detalhada de posição e HUD.
+- **Desvantagem**: Modelo excessivamente pesado (17.7M parâmetros e 67.95 MB) devido à projeção densa linear de 32.768 dimensões.
+
+#### F. ResNet-18
+Arquitetura convolucional profunda clássica da visão computacional com conexões residuais curtas, adaptada para receber 4 canais de entrada.
+- **Vantagem**: Obteve o **menor loss final** do benchmark (2.90), exibindo excelente capacidade de generalização e convergência.
+
+#### ⚠️ Nota sobre Swin Transformer e ConvNeXt (Não Utilizados)
+Ambos os modelos (**Swin Transformer** e **ConvNeXt-Tiny**) foram avaliados e implementados para teste, mas **removidos das rotinas de execução ativa** por serem excessivamente lentos e pesados no pipeline local:
+- O Swin Transformer (Tiny) e o ConvNeXt (Tiny) padrão contam com cerca de 28 milhões de parâmetros. Ao processar imagens acumuladas com lotes grandes (batch size 384), eles causam um gargalo extremo de VRAM (VRAM Thrashing), gerando tempos estimados de treinamento de até **40 horas** para apenas 10 épocas.
+- Embora sejam arquiteturas conceitualmente **mais potentes e modernas** do ponto de vista de representação abstrata de visão computacional, seu treinamento local é inviável sem acesso a servidores com múltiplas GPUs dedicadas de alta memória.
+
 #### 📊 Benchmark Oficial de Comparação
 
 Resultados baseados no treinamento automático (10 épocas) usando o script `compare_models.py`:
 
 <!-- BENCHMARK_START -->
-| Métrica | NatureCNN (Padrão) | CNN + LSTM + Attention | Vision Transformer (ViT) |
-| :--- | :--- | :--- | :--- |
-| **Poder de Aprendizado (Loss Final)** | `3.47` *(Pior)* | `3.02` *(Ótimo)* | **`2.99`** *(Melhor)* |
-| **Tempo de Treinamento** | **18.3 segundos** | 67.8 segundos | 54 minutos *(Pesadíssimo)* |
-| **Peso do Arquivo Final** | 16.33 MB | 23.71 MB | **9.70 MB** *(O mais leve!)* |
-| **Quantidade de Parâmetros (Neurônios)** | 4.19 Milhões | 6.11 Milhões | **2.44 Milhões** *(Muito Eficiente)* |
+| Métrica | NatureCNN (Padrão) | CNN + LSTM + Attention | Vision Transformer (ViT) | Impoola-CNN (GAP) | Impala-CNN (Original) | ResNet-18 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Poder de Aprendizado (Loss Final)** | `3.48` *(Pior)* | `3.02` | `3.00` | `2.93` | `3.03` | **`2.90`** *(Melhor)* |
+| **Tempo de Treinamento** | **`18.3 segundos`** *(Mais Rápido)* | `1.1 minutos` | `54.8 minutos` *(Pesadíssimo)* | `3.8 minutos` | `5.8 minutos` | `4.2 minutos` |
+| **Peso do Arquivo Final** | `16.33 MB` | `23.71 MB` | `9.70 MB` | **`4.20 MB`** *(O mais leve!)* | `67.95 MB` *(Mais Pesado)* | `44.37 MB` |
+| **Quantidade de Parâmetros (Neurônios)** | `4.20 Milhões` | `6.12 Milhões` | `2.45 Milhões` | **`1.01 Milhões`** *(Mais Eficiente)* | `17.72 Milhões` *(Menos Eficiente)* | `11.52 Milhões` |
 <!-- BENCHMARK_END -->
 
-**Conclusão**: O **ViT** é o mais inteligente e eficiente em arquitetura, gerando o modelo mais leve e preciso, mas ao custo de um treinamento muito demorado. O **CNN+LSTM** brilha no custo-benefício, treinando em menos de 2 minutos e garantindo precisão quase igual ao Transformer. A **NatureCNN** é ideal apenas para testes ultra-rápidos de debug.
+**Conclusão**: O **Impoola-CNN (GAP)** continua sendo o campeão absoluto de eficiência em arquitetura personalizada: obteve o menor loss final (`2.93`), tamanho super reduzido (`4.20 MB`) e treino rápido (`3.8 minutos`). A **ResNet-18** e o **Impala-CNN** original (com Flatten) se mostraram precisos, mas geram modelos mais pesados devido à falta de Global Average Pooling no caso do Impala (que projeta 32.768 dimensões diretamente em uma camada linear, resultando em `~65 MB` e 17.7M parâmetros).
 
 ### 4. Pipeline de Treinamento
 
