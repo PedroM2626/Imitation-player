@@ -360,7 +360,7 @@ class TemporalAttentionLSTM(BaseFeaturesExtractor):
         
         # CNN para extrair features espaciais
         self.cnn = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=5, stride=2, padding=2),
+            nn.Conv2d(self.n_frames, 32, kernel_size=5, stride=2, padding=2),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),

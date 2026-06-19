@@ -115,40 +115,32 @@ Classe `gym.Env` que:
 | 10-13 | Câmera X | Stick direito (discretizado) |
 | 14-17 | Câmera Y | Stick direito (discretizado) |
 
-### 3. Arquitetura da Rede Neural (`TemporalAttentionLSTM`)
+### 3. Arquiteturas de Rede Neural Disponiveis
 
-```
-Imagem (128x128, grayscale)
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  CNN (5x Conv2D + BatchNorm + ReLU) │
-│  AdaptiveAvgPool → Flatten → 512    │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  LSTM Bidirecional (2 layers, 256)  │
-│  Janela temporal de 10 frames       │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  Atenção Temporal (qual frame       │
-│  é mais importante?)                │
-└─────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────┐
-│  Linear(512 → 1024) → ReLU → Dropout│
-│  Linear(1024 → 512) → ReLU          │
-│           → Ação (18 bins)          │
-└─────────────────────────────────────┘
-```
+O projeto agora suporta três arquiteturas diferentes para processar as imagens e tomar decisões. Você pode comparar todas usando o script `compare_models.py`.
 
+#### A. NatureCNN (Padrão)
+A arquitetura clássica do Stable-Baselines3. É uma Rede Neural Convolucional simples e rápida (3 camadas).
+- **Vantagem**: Treina muito rápido, modelo muito leve.
+- **Desvantagem**: Não tem memória temporal explícita, reage apenas ao frame atual (apesar de receber 4 frames empilhados).
+
+#### B. CNN + LSTM + Attention (`train_agent_lstm.py`)
+```
+Imagem (128x128) → CNN (5 layers) → LSTM Bidirecional → Temporal Attention → Ação
+```
 - **CNN**: Extrai características espaciais (formas, bordas, texto, HUD)
 - **LSTM**: Mantém memória dos últimos 10 frames (movimento, combos)
-- **Attention**: Pondera quais frames são mais relevantes (o frame exato do soco importa mais que 2s de neutral)
+- **Attention**: Aprende a focar nos frames mais importantes da sequência antes de tomar a decisão final.
+
+#### C. Vision Transformer (ViT) (`train_agent_transformer.py`)
+```
+Imagem (4x 128x128) → Patch Embedding (64 patches/frame) → Temporal Embedding → Transformer Encoder (4 layers) → Ação
+```
+Substitui a CNN inteira por um mecanismo de Self-Attention puro.
+- A imagem é dividida em blocos (patches) de 16x16.
+- A rede aprende relações espaciais e temporais simultaneamente prestando atenção em todos os blocos de todos os 4 frames ao mesmo tempo.
+- **Vantagem**: Pode capturar padrões complexos globais na tela.
+- **Desvantagem**: Mais pesada e demora mais para treinar.
 
 ### 4. Pipeline de Treinamento
 
@@ -182,143 +174,70 @@ Imagem (128x128, grayscale)
 
 ---
 
-## Como Usar
+## Guia Completo de Treinamento (Passo a Passo)
 
-### Pré-requisitos
-
-- **Python 3.11**
-- **Windows** (para captura DX cam, win32gui, vgamepad)
-- **GPU NVIDIA com CUDA** (recomendado para treino)
-- **Jogo/emulador** aberto (RPCS3, PCSX2, Steam, etc.)
-
-### Instalação
-
-```powershell
-# Clonar
-git clone <repo>
-cd imitation-player
-
-# Ativar ambiente virtual
-.\venv\Scripts\Activate.ps1
-
-# Ou instalar do zero:
-pip install -r requirements.txt
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-```
-
-### Configuração
-
-Edite `hajime_agent/config/game_config.py` (ou `generic_agent/config/game_config.py`):
-
-```python
-GAME_CONFIG = {
-    "process_name": "rpcs3",         # Nome do processo (Task Manager)
-    "exe_path": None,                 # Caminho do .exe (auto-abrir)
-    "rom_path": None,                 # Caminho da ROM
-    "capture": {
-        "width": 854, "height": 480,  # Resolução da captura
-        "internal_width": 128, "internal_height": 128,  # Resolução do modelo
-        "target_fps": 60,
-    },
-    "actions": {
-        "num_actions": 18,
-        "input_mode": "gamepad",      # "gamepad" ou "keyboard_mouse"
-    }
-}
-```
-
-### Gravar Trajetórias
+### Fase 1: Coleta de Dados (Gravação)
 
 ```powershell
 cd hajime_agent/notebooks
 python record_trajectories.py
 ```
+- Abra o jogo/emulador antes.
+- Pressione `K` para iniciar/pausar a gravação e `ESC` para salvar.
+- **Dica de Ouro:** Variedade é mais importante que quantidade! Grave 15-20 trajetórias curtas (1-2 min) com diferentes movimentos, oponentes e cenários.
 
-- Abra o jogo antes
-- Pressione `K` para gravar
-- Pressione `ESC` para salvar e sair
-
-### Treinar
+### Fase 2: Treinamento Inicial (Behavioral Cloning)
 
 ```powershell
 python train_agent.py --epochs 100 --batch 384 --lr 1e-4
 ```
-
-Argumentos:
-- `--epochs` : Épocas de treino (default: 100)
-- `--batch` : Tamanho do batch (default: 384)
-- `--lr` : Learning rate (default: 1e-4)
-- `--device` : `cuda` ou `cpu`
-- `--model_path` : Caminho para modelo pré-treinado (transfer learning)
-- `--dagger` : Executar DAgger após treino
-
-### Visualizar MLflow
-
+**Como saber que está indo bem?**
+- **Loss diminuindo**: Começa em ~4-5, deve chegar abaixo de 1.0.
+- Se a loss "congelar" por muitas épocas ou a acurácia passar de 90% muito rápido, pode ser *overfitting*.
+- Para acompanhar os gráficos em tempo real, use o MLflow:
 ```powershell
 mlflow ui --backend-store-uri file:../mlruns
 # Abra http://localhost:5000
 ```
 
-### Testar a IA
+### Fase 3: Testar a IA
 
 ```powershell
 python run_ai.py
 ```
+- Pressione `K` para alternar entre IA e controle humano.
+- Observe: A IA está muito parada? Faz movimentos repetitivos? Fica travada no canto? Se sim, você precisa da Fase 4.
 
-- `K` : Ativar/desativar IA
-- `ESC` : Sair
+### Fase 4: Refinamento (DAgger)
 
-### DAgger (Correção Humana)
+DAgger (Dataset Aggregation) é a técnica secreta para IA perfeita. A IA treinada nunca será excelente de primeira. Nas situações onde ela erra, você apenas assume o controle e corrige o erro no ato.
 
+```
++----------+   +-----------+
+| IA joga  |-->| Você      |
+| Sozinha  |   | Corrige   |
++----------+   +-----------+
+     ^               |
+     |               v
++----------+   +-----------+
+| Nova IA  |<--| Retreinada|
+| Melhor   |   | com dados |
++----------+   +-----------+
+```
 ```powershell
 python run_dagger.py
 ```
-
-- `K` : Gravar/parar
-- `L` : Alternar entre IA e controle humano
-- `ESC` : Sair
-
----
-
-## Docker (Treino em Linux)
-
-Como a captura de tela (`dxcam`) e controles virtuais (`vgamepad`) exigem Windows, a gravação e execução devem ser no host. O treinamento pode rodar em Docker com GPU.
-
-```bash
-# Construir
-docker build -t imitation-player-train .
-
-# Executar (montar diretórios de dados)
-docker run --gpus all ^
-  -v %cd%/hajime_agent/demos:/app/hajime_agent/demos ^
-  -v %cd%/hajime_agent/models:/app/hajime_agent/models ^
-  imitation-player-train
-```
+- Pressione `L` para alternar a força entre IA e Humano.
+- Corrija os erros, salve e **Retreine** (`python train_agent.py`) com todos os dados juntos.
+- 5 a 8 iterações de DAgger costumam deixar a IA formidável.
 
 ---
 
-## Adaptação para Qualquer Jogo
+## Melhores Práticas de Machine Learning
 
-### Jogos de Emulador (RPCS3, PCSX2, Dolphin)
-
-1. Configure `process_name` para o nome do processo do emulador
-2. Abra o emulador/jogo antes de rodar os scripts
-3. O gamepad virtual Xbox 360 (`VX360Gamepad`) é reconhecido por todos os emuladores
-
-### Jogos de PC (Steam, executável nativo)
-
-1. Configure `process_name` para o nome do .exe
-2. Se o jogo usa teclado/mouse, mude `input_mode` para `"keyboard_mouse"`
-3. Mapeie as ações no `game_config.py`
-
-### Exemplos de Configuração
-
-| Jogo | `process_name` | `input_mode` |
-|---|---|---|
-| Hajime no Ippo (PS3/RPCS3) | `rpcs3` | `gamepad` |
-| Resident Evil Requiem (PC) | `re9` | `gamepad` |
-| Roblox (PC) | `RobloxPlayerBeta` | `keyboard_mouse` |
-| PS2 (PCSX2) | `pcsx2-qt` | `gamepad` |
+1. **Grave em sessões curtas**: Facilita o treinamento e permite maior diversidade.
+2. **Dados Balanceados**: Se você jogar apenas ofensivamente, a IA nunca aprenderá a defender ou recuar. Mostre a ela os dois lados.
+3. **Experimente Hiperparâmetros**: Se a IA não melhora, teste um `learning_rate` menor (`1e-5` é lento mas preciso) ou um `batch_size` diferente (use `512` se tiver muita VRAM).
 
 ---
 
@@ -329,10 +248,9 @@ docker run --gpus all ^
 | "Window not found" | Abra o jogo antes; verifique `process_name` |
 | Captura lenta | Fallback para `mss` em laptops dual-GPU; reduza resolução |
 | Gamepad não funciona | Teste com `test_xinput.py`; verifique se o driver ViGEm está instalado |
-| IA só anda para os lados | Falta variedade nos dados; grave mais situações |
-| IA aperta botões aleatórios | Treine mais épocas; verifique se a loss está descendo |
-| GPU out of memory | Reduza `batch_size` |
-| Overfitting | Grave mais dados diversos; aumente regularização |
+| IA só anda para os lados | Falta variedade nos dados; grave mais situações balanceadas |
+| Loss muito alta (não diminui) | Dados sujos ou LR muito alto. Tente regravar dados mais consistentes |
+| GPU out of memory | Reduza o `batch_size` |
 
 ---
 
