@@ -143,17 +143,19 @@ Substitui a CNN inteira por um mecanismo de Self-Attention puro.
 - **Desvantagem**: Mais pesada e demora mais para treinar.
 
 #### D. Impoola-CNN (GAP) (`train_agent_impoola.py`)
-Combina blocos residuais inspirados no Impala-CNN com a camada de **Global Average Pooling (GAP)** no lugar de camadas densas achatadas.
-- **Vantagem**: Altamente invariante a translações espaciais, com excelente generalização e tamanho extremamente compacto (apenas 1.01M de parâmetros e 4.20 MB).
+Combina blocos residuais inspirados no Impala-CNN com a camada de **Global Average Pooling (GAP)** no lugar de camadas densas achatadas (Flatten).
+*   **Vantagem**: Reduz drasticamente a quantidade de parâmetros e o peso do modelo (apenas 1.01M de parâmetros e 4.20 MB). Atua como um excelente regularizador, evitando overfitting e melhorando a generalização.
+*   **Limitação**: Ao calcular a média dos mapas de características (GAP) em vez de achatá-los, o modelo pode ter uma leve perda de precisão espacial detalhada (como ler elementos exatos de HUD ou coordenadas milimétricas).
 
 #### E. Impala-CNN (Original)
 A clássica arquitetura residual para Deep RL com achatamento (Flatten) na saída das convoluções.
-- **Vantagem**: Excelente capacidade de retenção espacial detalhada de posição e HUD.
-- **Desvantagem**: Modelo excessivamente pesado (17.7M parâmetros e 67.95 MB) devido à projeção densa linear de 32.768 dimensões.
+*   **Vantagem**: Excelente capacidade de retenção de informações espaciais exatas (ex: posição detalhada de objetos e HUD) devido ao achatamento dos mapas finais antes de passá-los para a camada linear.
+*   **Desvantagem**: Modelo excessivamente pesado (17.72M parâmetros e 67.95 MB) devido à projeção densa linear de 32.768 conexões.
 
 #### F. ResNet-18
 Arquitetura convolucional profunda clássica da visão computacional com conexões residuais curtas, adaptada para receber 4 canais de entrada.
-- **Vantagem**: Obteve o **menor loss final** do benchmark (2.90), exibindo excelente capacidade de generalização e convergência.
+*   **Vantagem**: Obteve o **menor loss final** do benchmark (2.90), exibindo excelente capacidade de generalização e convergência.
+*   **Escolha ideal na família**: Dentro da família ResNet, o ResNet-18 é o mais adequado para este projeto. Versões maiores (como ResNet-50 ou superior) demandam muita memória, aumentam drasticamente a latência de inferência (atrasando a ação em tempo real do agente) e causariam overfitting devido ao tamanho limitado do nosso dataset de imagens de baixa resolução (128x128).
 
 #### ⚠️ Nota sobre Swin Transformer e ConvNeXt (Não Utilizados)
 Ambos os modelos (**Swin Transformer** e **ConvNeXt-Tiny**) foram avaliados e implementados para teste, mas **removidos das rotinas de execução ativa** por serem excessivamente lentos e pesados no pipeline local:
@@ -173,7 +175,10 @@ Resultados baseados no treinamento automático (10 épocas) usando o script `com
 | **Quantidade de Parâmetros (Neurônios)** | `4.20 Milhões` | `6.12 Milhões` | `2.45 Milhões` | **`1.01 Milhões`** *(Mais Eficiente)* | `17.72 Milhões` *(Menos Eficiente)* | `11.52 Milhões` |
 <!-- BENCHMARK_END -->
 
-**Conclusão**: O **Impoola-CNN (GAP)** continua sendo o campeão absoluto de eficiência em arquitetura personalizada: obteve o menor loss final (`2.93`), tamanho super reduzido (`4.20 MB`) e treino rápido (`3.8 minutos`). A **ResNet-18** e o **Impala-CNN** original (com Flatten) se mostraram precisos, mas geram modelos mais pesados devido à falta de Global Average Pooling no caso do Impala (que projeta 32.768 dimensões diretamente em uma camada linear, resultando em `~65 MB` e 17.7M parâmetros).
+**Análise Comparativa (Impala vs Impoola)**:
+- **Tamanho e Recursos**: O Impoola-CNN (GAP) consome apenas **4.20 MB** de armazenamento em disco contra **67.95 MB** da versão original do Impala-CNN. Trata-se de uma redução drástica de aproximadamente **93.8%** no peso físico do modelo e na contagem de parâmetros (1.01M vs 17.72M).
+- **Precisão Espacial vs Generalização**: Embora o Impala-CNN original retenha maior sensibilidade à localização e HUD devido à camada final achatada (Flatten) que resulta em uma perda ligeiramente menor em tarefas focadas na posição precisa, o Impoola-CNN (GAP) atua como um excelente regularizador estrutural, evitando overfitting com perdas competitivas no benchmark final.
+- **Conclusão**: O **Impoola-CNN (GAP)** é o campeão absoluto de eficiência em arquiteturas personalizadas por sua excelente taxa de acerto e leveza de execução. A **ResNet-18** é indicada para maior robustez geral de visão caso o hardware de inferência local comporte o peso extra de 44.37 MB.
 
 ### 4. Pipeline de Treinamento
 
