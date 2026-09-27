@@ -1,6 +1,6 @@
 """
-Executa a IA treinada com arquitetura CNN+LSTM+Attention.
-Carrega bc_policy_lstm.zip e joga o jogo usando memoria temporal.
+Runs the AI trained with the CNN+LSTM+Attention architecture.
+Loads bc_policy_lstm.zip and plays the game using temporal memory.
 """
 
 import sys
@@ -24,7 +24,7 @@ from utils import get_last_index, LSTMWrapper
 from config.game_config import GAME_CONFIG
 
 
-# --- CONFIGURACAO ---
+# --- CONFIGURATION ---
 DEVICE = th.device("cuda" if th.cuda.is_available() else "cpu")
 SCREEN_WIDTH = 854
 SCREEN_HEIGHT = 480
@@ -35,7 +35,7 @@ STEPS_PATH = MODEL_PATH + "steps"
 
 
 class RendererThread(threading.Thread):
-    """Thread de renderizacao para visualizar a IA jogando."""
+    """Rendering thread for visualizing the AI playing."""
     
     def __init__(self, width=854, height=480):
         super().__init__(daemon=True)
@@ -86,7 +86,7 @@ class RendererThread(threading.Thread):
 
 
 class AILSTMPlayer:
-    """Agente de IA que joga usando modelo CNN+LSTM+Attention."""
+    """AI agent that plays using the CNN+LSTM+Attention model."""
     
     def __init__(self, env, model_path, device='cuda'):
         self.env = env
@@ -96,8 +96,8 @@ class AILSTMPlayer:
         self.current_epoch = 0
         
     def load_latest_model(self):
-        """Carrega o modelo LSTM mais recente."""
-        # Tentar carregar bc_policy_lstm.zip
+        """Loads the most recent LSTM model."""
+        # Try to load bc_policy_lstm.zip
         main_model_file = os.path.join(os.path.dirname(self.model_path), "bc_policy_lstm.zip")
         if not os.path.exists(main_model_file):
             main_model_file = os.path.join(self.model_path, "bc_policy_lstm.zip")
@@ -116,7 +116,7 @@ class AILSTMPlayer:
             print("No LSTM model found! Train first using train_agent_lstm.py.")
             return False
         
-        # Verificar se tem LSTM e envolver o wrapper
+        # Check for an LSTM and wrap the policy with the wrapper
         has_lstm = (hasattr(self.policy, 'features_extractor') and 
                     hasattr(self.policy.features_extractor, 'lstm'))
         
@@ -128,7 +128,7 @@ class AILSTMPlayer:
         return True
     
     def play(self, manual_mode=False, max_steps=None):
-        """Executa a IA no jogo."""
+        """Runs the AI in the game."""
         obs = self.env.reset()
         renderer = RendererThread(SCREEN_WIDTH, SCREEN_HEIGHT)
         renderer.start()
@@ -174,7 +174,7 @@ class AILSTMPlayer:
                     if aggressiveness == 1.0:
                         pred_act, _ = self.policy.predict(obs, deterministic=False)
                     else:
-                        # Hack de agressividade
+                        # Aggressiveness hack
                         if isinstance(self.policy, LSTMWrapper):
                             inner_policy = self.policy.policy
                         else:
@@ -198,7 +198,7 @@ class AILSTMPlayer:
                         
                     action = [pred_act]
                 else:
-                    # Modo manual
+                    # Manual mode
                     input_mode = GAME_CONFIG["actions"].get("input_mode", "gamepad")
                     if input_mode == "keyboard_mouse":
                         import mouse
@@ -216,10 +216,10 @@ class AILSTMPlayer:
                         if keyboard.is_pressed('o'): action[0][5] = 1
                         if keyboard.is_pressed('p'): action[0][6] = 1
                 
-                # Executar acao
+                # Execute action
                 obs, _, _, _ = self.env.step(action)
                 
-                # Atualizar renderer
+                # Update renderer
                 status = "AI LSTM" if ai_active else "MANUAL"
                 color = (0, 255, 0) if ai_active else (0, 0, 255)
                 if obs is not None:

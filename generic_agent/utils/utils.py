@@ -1,6 +1,6 @@
 """
-Utilitarios para o projeto de Imitation Learning.
-Classes e funcoes auxiliares.
+Utilities for the Imitation Learning project.
+Helper classes and functions.
 """
 
 import os
@@ -13,17 +13,17 @@ from stable_baselines3.common.policies import ActorCriticPolicy
 
 def get_last_index(path: str, prefix: str, suffix: str = ".zip") -> int:
     """
-    Encontra o maior numero de indice em arquivos dentro de um diretorio.
+    Find the highest index number among files in a directory.
     
-    Exemplo: Se existem 'bc_policy0.zip', 'bc_policy15.zip', retorna 15.
+    Example: if 'bc_policy0.zip' and 'bc_policy15.zip' exist, returns 15.
     
     Args:
-        path: Caminho do diretorio
-        prefix: Prefixo do arquivo (ex: "bc_policy")
-        suffix: Sufixo do arquivo (ex: ".zip")
+        path: Directory path
+        prefix: File prefix (ex: "bc_policy")
+        suffix: File suffix (ex: ".zip")
     
     Returns:
-        Maior indice encontrado, ou -1 se nao houver arquivos
+        Highest index found, or -1 if there are no files
     """
     last_index = -1
     p = Path(path)
@@ -41,59 +41,59 @@ def get_last_index(path: str, prefix: str, suffix: str = ".zip") -> int:
 
 class LSTMWrapper:
     """
-    Wrapper para politicas com extrator LSTM.
-    Gerencia o estado do LSTM entre chamadas (reset entre episodios).
+    Wrapper for policies with an LSTM feature extractor.
+    Manages the LSTM state across calls (reset between episodes).
     """
     def __init__(self, policy: ActorCriticPolicy):
         self.policy = policy
         self.lstm_state = None
-        self.feature_buffer = []  # Mantem buffer aqui
+        self.feature_buffer = []  # Keep the buffer here
         self._last_obs = None
         
-        # Verificar se a politica tem LSTM
+        # Check whether the policy has an LSTM
         self.has_lstm = (hasattr(policy, 'features_extractor') and 
                         hasattr(policy.features_extractor, 'lstm'))
     
     def reset(self):
-        """Reseta o estado LSTM (deve ser chamado a cada novo episodio)."""
+        """Reset the LSTM state (must be called for each new episode)."""
         self.lstm_state = None
         self.feature_buffer = []
-        # Chamar reset do features_extractor se existir
+        # Call the features_extractor reset if it exists
         if self.has_lstm and hasattr(self.policy, 'features_extractor') and \
            hasattr(self.policy.features_extractor, 'reset_hidden'):
             self.policy.features_extractor.reset_hidden()
     
     def predict(self, observation, deterministic: bool = False):
         """
-        Faz predicao de acoes mantendo estado LSTM.
+        Predict actions while keeping the LSTM state.
         
         Args:
-            observation: Array com a observacao atual
-            deterministic: Se True, sempre pega a acao mais provavel
+            observation: Array with the current observation
+            deterministic: If True, always takes the most likely action
         
         Returns:
-            Acao predita e estado (None por compatibilidade)
+            Predicted action and state (None for compatibility)
         """
         with th.no_grad():
-            # Converter para tensor se necessario
+            # Convert to a tensor if needed
             if not isinstance(observation, th.Tensor):
                 obs_tensor = th.as_tensor(observation).float()
             else:
                 obs_tensor = observation.float()
             
-            # Normalizar
+            # Normalize
             if obs_tensor.max() > 1.0:
                 obs_tensor = obs_tensor / 255.0
             
-            # Fazer predicao pela politica
-            # Note: A politica do SB3 pode ter seu proprio gerenciamento de LSTM
+            # Make the prediction through the policy
+            # Note: the SB3 policy may have its own LSTM management
             deterministic_float = 1.0 if deterministic else 0.0
             
-            # Usar o metodo predict da politica base
+            # Use the predict method of the base policy
             if hasattr(self.policy, 'predict'):
                 action, state = self.policy.predict(observation, deterministic=deterministic)
                 return action, state
     
     def __getattr__(self, name):
-        """Delega acessos ao objeto de politica base."""
+        """Delegate attribute access to the base policy object."""
         return getattr(self.policy, name)

@@ -1,10 +1,10 @@
 """
-Impoola-CNN Feature Extractor para Imitation Learning.
+Impoola-CNN feature extractor for Imitation Learning.
 
-Uma arquitetura baseada no Impala-CNN, mas utilizando Global Average Pooling (GAP)
-no lugar da camada de achatamento (Flatten) antes da projeção linear.
-Isso torna o modelo altamente invariante a translações espaciais, extremamente leve
-(menos parâmetros) e com excelente capacidade de generalização.
+An architecture based on Impala-CNN, but using Global Average Pooling (GAP)
+instead of the flatten layer (Flatten) before the linear projection.
+This makes the model highly invariant to spatial translations, extremely light
+(fewer parameters) and with excellent generalization ability.
 """
 
 import torch as th
@@ -14,7 +14,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 
 class ResidualBlock(nn.Module):
-    """Bloco residual padrão para o Impala/Impoola CNN."""
+    """Standard residual block for the Impala/Impoola CNN."""
     
     def __init__(self, channels: int):
         super().__init__()
@@ -32,7 +32,7 @@ class ResidualBlock(nn.Module):
 
 
 class ImpoolaBlock(nn.Module):
-    """Bloco principal do Impoola: Conv2d -> MaxPool2d -> 2x ResidualBlocks."""
+    """Main Impoola block: Conv2d -> MaxPool2d -> 2x ResidualBlocks."""
     
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
@@ -51,8 +51,8 @@ class ImpoolaBlock(nn.Module):
 
 class ImpoolaCNNExtractor(BaseFeaturesExtractor):
     """
-    Impoola-CNN Extractor para Stable-Baselines3.
-    Reemplaza la NatureCNN clásica por un extractor residual con Global Average Pooling (GAP).
+    Impoola-CNN extractor for Stable-Baselines3.
+    Replaces the classic NatureCNN with a residual extractor using Global Average Pooling (GAP).
     """
     
     def __init__(self, 
@@ -61,10 +61,10 @@ class ImpoolaCNNExtractor(BaseFeaturesExtractor):
                  channels_list = [32, 64, 128]):
         super().__init__(observation_space, features_dim)
         
-        # O space de observações tem formato (n_frames, H, W)
+        # The observation space has shape (n_frames, H, W)
         self.n_frames = observation_space.shape[0]
         
-        # Construir a pilha de blocos Impoola
+        # Build the stack of Impoola blocks
         blocks = []
         in_ch = self.n_frames
         for out_ch in channels_list:
@@ -77,14 +77,14 @@ class ImpoolaCNNExtractor(BaseFeaturesExtractor):
         self.gap = nn.AdaptiveAvgPool2d((1, 1))
         self.flatten = nn.Flatten()
         
-        # Projeção linear para features_dim
+        # Linear projection to features_dim
         self.head = nn.Sequential(
             nn.Linear(channels_list[-1], features_dim),
             nn.ReLU(),
         )
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
-        # Normalizar pixels para [0, 1] se necessário
+        # Normalize pixels to [0, 1] if needed
         x = observations.float()
         if x.max() > 1.0:
             x = x / 255.0

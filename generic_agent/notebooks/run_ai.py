@@ -1,6 +1,6 @@
 """
-Notebook para rodar a IA treinada em qualquer jogo.
-Adaptado de running-imitation-lstm.ipynb para ser generico.
+Notebook for running the trained AI in any game.
+Adapted from running-imitation-lstm.ipynb to be generic.
 """
 
 import sys
@@ -25,19 +25,19 @@ from utils import get_last_index, LSTMWrapper
 from config.game_config import GAME_CONFIG
 
 
-# --- CONFIGURACAO ---
+# --- CONFIGURATION ---
 DEVICE = th.device("cuda" if th.cuda.is_available() else "cpu")
 SCREEN_WIDTH = 854
 SCREEN_HEIGHT = 480
 MAX_FPS = 120
 
-# Ajuste o caminho dos modelos treinados
+# Adjust the path to the trained models
 MODEL_PATH = "./models/"
 STEPS_PATH = MODEL_PATH + "steps"
 
 
 class RendererThread(threading.Thread):
-    """Thread de renderizacao para visualizar a IA jogando."""
+    """Rendering thread to visualize the AI playing."""
     
     def __init__(self, width=854, height=480):
         super().__init__(daemon=True)
@@ -69,15 +69,15 @@ class RendererThread(threading.Thread):
             
             with self.lock:
                 if self.frame is not None:
-                    # Redimensionar frame para a tela
+                    # Resize the frame to the screen
                     img_view = cv2.resize(self.frame, (self.width, self.height), interpolation=cv2.INTER_NEAREST)
                     img_rgb = cv2.cvtColor(img_view, cv2.COLOR_BGR2RGB)
                     
-                    # Criar surface do pygame
+                    # Create the pygame surface
                     surf = pygame.surfarray.make_surface(img_rgb.swapaxes(0, 1))
                     window.blit(surf, (0, 0))
                     
-                    # Texto de status
+                    # Status text
                     txt = font.render(
                         f"{self.info} | FPS: {int(self.fps)} | Epoch: {self.current_epoch}",
                         True, (255, 255, 255)
@@ -90,7 +90,7 @@ class RendererThread(threading.Thread):
 
 
 class AIPlayer:
-    """Agente de IA que joga o jogo usando um modelo pre-treinado."""
+    """AI agent that plays the game using a pretrained model."""
     
     def __init__(self, env, model_path, device='cuda'):
         self.env = env
@@ -100,8 +100,8 @@ class AIPlayer:
         self.current_epoch = 0
         
     def load_latest_model(self):
-        """Carrega o modelo mais recente do diretorio de modelos."""
-        # 1. Tentar carregar o modelo principal bc_policy.zip na raiz de models ou do path de steps
+        """Load the latest model from the model directory."""
+        # 1. Try to load the main bc_policy.zip model at the models root or the steps path
         main_model_file = os.path.join(os.path.dirname(self.model_path), "bc_policy.zip")
         if not os.path.exists(main_model_file):
             main_model_file = os.path.join(self.model_path, "bc_policy.zip")
@@ -111,7 +111,7 @@ class AIPlayer:
             self.policy = ActorCriticPolicy.load(main_model_file, device=self.device)
             self.current_epoch = "final"
         else:
-            # Fallback para o get_last_index
+            # Fall back to get_last_index
             last_idx = get_last_index(self.model_path, "bc_policy", ".zip")
             if last_idx < 0:
                 print("No trained models found!")
@@ -122,7 +122,7 @@ class AIPlayer:
             self.policy = ActorCriticPolicy.load(model_file, device=self.device)
             self.current_epoch = last_idx
         
-        # Verificar se tem LSTM e envolver o wrapper
+        # Check for an LSTM and wrap the policy
         has_lstm = (hasattr(self.policy, 'lstm') or 
                    (hasattr(self.policy, 'features_extractor') and 
                     hasattr(self.policy.features_extractor, 'lstm')))
@@ -135,7 +135,7 @@ class AIPlayer:
         return True
     
     def play(self, manual_mode=False, max_steps=None):
-        """Executa a IA no jogo."""
+        """Run the AI in the game."""
         obs = self.env.reset()
         renderer = RendererThread(SCREEN_WIDTH, SCREEN_HEIGHT)
         renderer.start()
@@ -157,7 +157,7 @@ class AIPlayer:
                     ai_active = not ai_active
                     if ai_active:
                         print("AI ACTIVATED")
-                        # Resetar LSTM ao ativar
+                        # Reset the LSTM on activation
                         if isinstance(self.policy, LSTMWrapper):
                             self.policy.reset()
                     else:
@@ -168,7 +168,7 @@ class AIPlayer:
                 if keyboard.is_pressed('esc'):
                     break
                 
-                # Pygame Event Pump e Manual Override
+                # Pygame event pump and manual override
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         break
@@ -189,21 +189,21 @@ class AIPlayer:
                             latent_pi, _ = self.policy.mlp_extractor(features)
                             action_logits = self.policy.action_net(latent_pi)
                             
-                        # Extrair a porcentagem exata que a IA tem "certeza" de cada botao
+                        # Extract the exact confidence the AI has for each button
                         probs = th.sigmoid(action_logits).cpu().numpy()[0]
                         
-                        # Aplicar fator de agressividade nos cliques de mouse (geralmente ataques)
+                        # Apply the aggressiveness factor to mouse clicks (usually attacks)
                         mappings = GAME_CONFIG["actions"].get("mappings", [])
                         for i, m in enumerate(mappings):
                             if i < len(probs) and m.get("type") == "mouse_button":
                                 probs[i] = min(probs[i] * aggressiveness, 1.0)
                         
-                        # Amostragem usando a probabilidade hackeada
+                        # Sampling using the hacked probability
                         pred_act = (np.random.rand(len(probs)) < probs).astype(np.float32)
                         
                     action = [pred_act]
                 else:
-                    # Modo manual
+                    # Manual mode
                     input_mode = GAME_CONFIG["actions"].get("input_mode", "gamepad")
                     if input_mode == "keyboard_mouse":
                         import mouse
@@ -221,10 +221,10 @@ class AIPlayer:
                         if keyboard.is_pressed('o'): action[0][5] = 1
                         if keyboard.is_pressed('p'): action[0][6] = 1
                 
-                # Executar acao
+                # Execute the action
                 obs, _, _, _ = self.env.step(action)
                 
-                # Atualizar renderer
+                # Update the renderer
                 status = "AI ACTIVE" if ai_active else "MANUAL"
                 color = (0, 255, 0) if ai_active else (0, 0, 255)
                 if obs is not None:
@@ -255,14 +255,14 @@ class AIPlayer:
 
 
 def main():
-    # Criar ambiente
+    # Create the environment
     env = GenericGameEnv(GAME_CONFIG)
     env = DummyVecEnv([lambda: env])
     env = VecTransposeImage(env)
     env = VecFrameStack(env, n_stack=4)
     env.reset()
     
-    # Criar player e carregar modelo
+    # Create the player and load the model
     player = AIPlayer(env, STEPS_PATH, device=DEVICE)
     
     if player.load_latest_model():

@@ -1,6 +1,6 @@
 """
-Script de treinamento generico para imitation learning.
-Baseado em trainning-imitation.ipynb.
+Generic training script for imitation learning.
+Based on trainning-imitation.ipynb.
 """
 
 import os
@@ -42,8 +42,8 @@ class MLflowOutputFormat(KVWriter):
 
 class ImitationLearner:
     """
-    Treina um agente de Imitation Learning usando Behavioral Cloning (BC)
-    e DAgger (Dataset Aggregation).
+    Trains an Imitation Learning agent using Behavioral Cloning (BC)
+    and DAgger (Dataset Aggregation).
     """
     
     def __init__(self, config, demo_path='./demos/'):
@@ -55,7 +55,7 @@ class ImitationLearner:
         os.makedirs(demo_path, exist_ok=True)
     
     def _create_env(self):
-        """Cria o ambiente envolvido."""
+        """Creates the wrapped environment."""
         train_config = self.config.copy()
         train_config["dummy"] = True
         env = GenericGameEnv(train_config)
@@ -64,7 +64,7 @@ class ImitationLearner:
         return env
     
     def load_demos(self):
-        """Carrega as trajetorias salvas."""
+        """Loads the saved trajectories."""
         demo_files = glob.glob(os.path.join(self.demo_path, 'demos*.pt'))
         
         trajectories = []
@@ -72,7 +72,7 @@ class ImitationLearner:
             print(f"Loading: {f}")
             try:
                 data = th.load(f, map_location=th.device('cpu'))
-                # Suporte tanto para listas quanto para trajetorias individuais
+                # Support both lists and individual trajectories
                 if isinstance(data, list):
                     for t in data:
                         obs = t.obs
@@ -97,12 +97,12 @@ class ImitationLearner:
     
     def train(self, epochs=100, batch_size=384, save_path='./models/'):
         """
-        Treina a politica usando Behavioral Cloning.
+        Trains the policy using Behavioral Cloning.
         
         Args:
-            epochs: Numero de epocas de treinamento
-            batch_size: Tamanho do batch
-            save_path: Caminho para salvar os modelos
+            epochs: Number of training epochs
+            batch_size: Batch size
+            save_path: Path to save the models
         """
         if not self.trajectories:
             print("No trajectories to train!")
@@ -110,10 +110,10 @@ class ImitationLearner:
         
         os.makedirs(save_path, exist_ok=True)
         
-        # Criar objeto BC (Behavioral Cloning)
+        # Create the BC (Behavioral Cloning) object
         rng = np.random.default_rng()
         
-        # Criar custom logger para MLflow, Console e CSV
+        # Create a custom logger for MLflow, console and CSV
         log_dir = os.path.join(save_path, "logs")
         os.makedirs(log_dir, exist_ok=True)
         
@@ -124,7 +124,7 @@ class ImitationLearner:
         ]
         custom_sb3_logger = Logger(folder=log_dir, output_formats=output_formats)
         
-        # Criar a politica CNN
+        # Create the CNN policy
         from stable_baselines3.common.policies import ActorCriticCnnPolicy
         policy = ActorCriticCnnPolicy(
             observation_space=self.env.observation_space,
@@ -145,7 +145,7 @@ class ImitationLearner:
         print("Starting training...")
         bc_trainer.train(n_epochs=epochs)
         
-        # Salvar modelo
+        # Save model
         model_path = os.path.join(save_path, "bc_policy.zip")
         bc_trainer.policy.save(model_path)
         print(f"Model saved to {model_path}")
@@ -154,37 +154,37 @@ class ImitationLearner:
     
     def dagger_iteration(self):
         """
-        Executa uma iteracao de DAGGER:
-        1. A politica atual joga e gera trajetorias
-        2. O humano (implicitamente) corrige e gera novos dados
-        3. Retreina com dados combinados
+        Runs one DAgger iteration:
+        1. The current policy plays and generates trajectories
+        2. The human (implicitly) corrects them and produces new data
+        3. Retrains on the combined data
         """
-        # TODO: DAGGER implementacao completa necessita de loop humano-in-the-loop
+        # TODO: a full DAgger implementation requires a human-in-the-loop
         pass
 
 
 def main():
-    # ===== CONFIGURACAO DO MLFLOW =====
+    # ===== MLFLOW SETUP =====
     mlflow.set_tracking_uri("file:../mlruns")
     mlflow.set_experiment("Hajime_no_Ippo_Imitation_Learning")
     
     with mlflow.start_run(run_name="BC_Training_Simple") as run:
-        # Registrar hiperparametros
+        # Log hyperparameters
         mlflow.log_param("epochs", TRAINING_CONFIG.get("epochs", 100))
         mlflow.log_param("batch_size", TRAINING_CONFIG.get("batch_size", 384))
         mlflow.log_param("learning_rate", TRAINING_CONFIG.get("learning_rate", 1e-4))
         mlflow.log_param("model_type", "imitation_learning_bc_simple")
         
-        # Registrar parametros do emulador/ROM
+        # Log emulator/ROM parameters
         mlflow.log_param("process_name", GAME_CONFIG.get("process_name"))
         mlflow.log_param("rom_path", GAME_CONFIG.get("rom_path"))
         mlflow.log_param("exe_path", GAME_CONFIG.get("exe_path"))
         
-        # Criar e treinar
+        # Create and train
         learner = ImitationLearner(GAME_CONFIG, demo_path='./demos/')
         trajectories = learner.load_demos()
         
-        # Registrar metadados do dataset
+        # Log dataset metadata
         mlflow.log_param("dataset_num_trajectories", len(trajectories))
         mlflow.log_param("dataset_total_frames", sum(len(t.obs) for t in trajectories) if trajectories else 0)
         
@@ -194,7 +194,7 @@ def main():
             save_path='./models/'
         )
         
-        # Registrar artefatos
+        # Log artifacts
         mlflow.log_artifact('./models/bc_policy.zip', artifact_path="model")
 
 

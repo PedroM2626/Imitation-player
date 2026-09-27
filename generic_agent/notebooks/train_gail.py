@@ -1,6 +1,6 @@
 """
-Script para treinar um agente usando GAIL (Generative Adversarial Imitation Learning).
-Diferente do BC, o GAIL requer que o jogo esteja rodando para treinar o gerador (PPO).
+Script to train an agent using GAIL (Generative Adversarial Imitation Learning).
+Unlike BC, GAIL requires the game to be running so the generator (PPO) can be trained.
 """
 
 import os
@@ -10,14 +10,14 @@ import argparse
 from typing import List, Dict, Any
 import time
 
-# Ajustar path para encontrar os modulos
+# Adjust the path so the modules can be found
 sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../utils"))
 
 import numpy as np
 import torch as th
 
-# Bibliotecas de Machine Learning
+# Machine Learning libraries
 from imitation.algorithms.adversarial.gail import GAIL
 from imitation.rewards.reward_nets import BasicRewardNet
 from imitation.util.networks import RunningNorm
@@ -27,7 +27,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticCnnPolicy
 from stable_baselines3.common.logger import KVWriter, Logger, HumanOutputFormat, CSVOutputFormat
 
-# Modulos locais
+# Local modules
 from game_env import GenericGameEnv
 from config.game_config import GAME_CONFIG
 
@@ -52,25 +52,25 @@ def print_header(title: str) -> None:
 
 
 class DataManager:
-    """Gerencia os dados de treinamento (trajetorias)."""
+    """Manages the training data (trajectories)."""
     
     def __init__(self, demo_path: str = './demos/'):
         self.demo_path = demo_path
         self.trajectories: List[Trajectory] = []
     
     def load_demos(self) -> List[Trajectory]:
-        print_header("1. CARREGANDO DADOS (GABARITO HUMANO)")
+        print_header("1. LOADING DATA (HUMAN DEMOS)")
         demo_files = sorted(glob.glob(os.path.join(self.demo_path, 'demo*.pt')))
         
         if not demo_files:
-            raise FileNotFoundError(f"Nenhum arquivo de demo encontrado em {self.demo_path}")
+            raise FileNotFoundError(f"No demo files found in {self.demo_path}")
         
-        print(f"Encontrados {len(demo_files)} arquivos de demo:")
+        print(f"Found {len(demo_files)} demo files:")
         
         all_trajectories = []
         for i, demo_file in enumerate(demo_files):
             try:
-                print(f"  [{i+1}/{len(demo_files)}] Carregando {os.path.basename(demo_file)}...", end=" ")
+                print(f"  [{i+1}/{len(demo_files)}] Loading {os.path.basename(demo_file)}...", end=" ")
                 data = th.load(demo_file, map_location='cpu')
                 
                 if isinstance(data, list):
@@ -90,7 +90,7 @@ class DataManager:
                     print("(1 traj.)")
                     
             except Exception as e:
-                print(f" ERRO: {e}")
+                print(f" ERROR: {e}")
                 continue
         
         self.trajectories = all_trajectories
@@ -103,15 +103,15 @@ class GAILTrainer:
         self.device = th.device(device)
         self.total_timesteps = total_timesteps
         
-        print_header("2. INICIANDO AMBIENTE DO JOGO")
-        print("Aguardando jogo ser detectado na tela... GAIL precisa jogar o jogo para aprender!")
+        print_header("2. STARTING THE GAME ENVIRONMENT")
+        print("Waiting for the game to be detected on screen... GAIL needs to play the game to learn!")
         self.env = self._create_env()
         self.gail_trainer = None
         self.learner = None
 
     def _create_env(self):
         train_config = self.config.copy()
-        train_config["dummy"] = False  # MUITO IMPORTANTE: O jogo DEVE estar rodando fisicamente!
+        train_config["dummy"] = False  # CRITICAL: the game MUST actually be running!
         env = GenericGameEnv(train_config)
         env = DummyVecEnv([lambda: env])
         env = VecTransposeImage(env)
@@ -119,7 +119,7 @@ class GAILTrainer:
         return env
 
     def setup_trainer(self, trajectories: List[Trajectory], model_path: str = None):
-        print_header("3. CONFIGURANDO REDE ADVERSARIA (GAIL)")
+        print_header("3. SETTING UP THE ADVERSARIAL NETWORK (GAIL)")
         
         rng = np.random.default_rng(seed=42)
         log_dir = os.path.join("./models/imitation/", "gail_logs")
@@ -128,13 +128,13 @@ class GAILTrainer:
         output_formats = [HumanOutputFormat(sys.stdout), CSVOutputFormat(os.path.join(log_dir, "progress.csv")), MLflowOutputFormat()]
         custom_sb3_logger = Logger(folder=log_dir, output_formats=output_formats)
 
-        # 1. Agente (Gerador) usando PPO
+        # 1. Agent (Generator) using PPO
         if model_path and os.path.exists(model_path):
-            print(f"[+] Transfer Learning ativado! Carregando PPO base: {model_path}")
+            print(f"[+] Transfer Learning enabled! Loading base PPO: {model_path}")
             self.learner = PPO.load(model_path, env=self.env, device=self.device)
         else:
             if model_path:
-                print(f"[!] Aviso: Modelo '{model_path}' nao encontrado. Treinando PPO do zero.")
+                print(f"[!] Warning: model '{model_path}' not found. Training PPO from scratch.")
             self.learner = PPO(
                 env=self.env,
                 policy=ActorCriticCnnPolicy,
@@ -146,7 +146,7 @@ class GAILTrainer:
                 device=self.device,
             )
 
-        # 2. Rede de Recompensa (Discriminador)
+        # 2. Reward network (Discriminator)
         reward_net = BasicRewardNet(
             observation_space=self.env.observation_space,
             action_space=self.env.action_space,
@@ -164,11 +164,11 @@ class GAILTrainer:
             reward_net=reward_net,
             custom_logger=custom_sb3_logger,
         )
-        print("[OK] GAIL Trainer configurado com PPO e Discriminador.")
+        print("[OK] GAIL Trainer configured with PPO and Discriminator.")
 
     def train(self, save_path: str = './models/'):
-        print_header("4. INICIANDO TREINAMENTO ADVERSARIO (JOGO ATIVO)")
-        print(f"O agente vai jogar por {self.total_timesteps} passos.")
+        print_header("4. STARTING ADVERSARIAL TRAINING (GAME ACTIVE)")
+        print(f"The agent will play for {self.total_timesteps} steps.")
         
         os.makedirs(save_path, exist_ok=True)
         
@@ -178,30 +178,30 @@ class GAILTrainer:
             
             try:
                 self.gail_trainer.train(total_timesteps=self.total_timesteps)
-                print("\n[OK] Treinamento GAIL concluido!")
+                print("\n[OK] GAIL training complete!")
                 
-                # Salvar a politica do PPO gerada pelo GAIL
+                # Save the PPO policy generated by GAIL
                 policy_path = os.path.join(save_path, "gail_policy")
                 self.learner.policy.save(policy_path)
                 mlflow.log_artifact(policy_path + ".zip")
-                print(f"[OK] Modelo salvo em {policy_path}.zip")
+                print(f"[OK] Model saved to {policy_path}.zip")
                 
             except Exception as e:
-                print(f"\n[ERRO] Falha no treinamento GAIL: {e}")
+                print(f"\n[ERROR] GAIL training failed: {e}")
                 import traceback
                 traceback.print_exc()
 
 def main():
-    parser = argparse.ArgumentParser(description="Treinamento GAIL.")
-    parser.add_argument("--timesteps", type=int, default=100000, help="Passos totais de jogo para treinamento")
-    parser.add_argument("--model_path", type=str, default=None, help="Caminho para modelo (.zip) pre-treinado (Transfer Learning)")
+    parser = argparse.ArgumentParser(description="GAIL training.")
+    parser.add_argument("--timesteps", type=int, default=100000, help="Total gameplay steps for training")
+    parser.add_argument("--model_path", type=str, default=None, help="Path to a pretrained model (.zip) (Transfer Learning)")
     args = parser.parse_args()
 
     dm = DataManager()
     try:
         trajectories = dm.load_demos()
     except Exception as e:
-        print(f"Erro ao carregar dados: {e}")
+        print(f"Error loading data: {e}")
         return
 
     device = "cuda" if th.cuda.is_available() else "cpu"

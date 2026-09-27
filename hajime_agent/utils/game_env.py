@@ -1,6 +1,6 @@
 """
-Ambiente de jogo generico para Imitation Learning.
-Baseado no resident_requiem.py, mas adaptado para qualquer jogo.
+Generic game environment for Imitation Learning.
+Based on resident_requiem.py, but adapted for any game.
 """
 
 import gymnasium as gym
@@ -23,23 +23,23 @@ from typing import Dict, Any
 
 class GenericGameEnv(gym.Env):
     """
-    Ambiente generico para jogos via emulador ou executavel PC.
+    Generic environment for games via emulator or PC executable.
     
-    Captura a tela do jogo e envia comandos via gamepad virtual (DualShock 4/Xbox).
-    Compativel com emuladores de PS3 (RPCS3), PS2 (PCSX2), e jogos de PC.
+    Captures the game screen and sends commands through a virtual gamepad (DualShock 4/Xbox).
+    Compatible with PS3 (RPCS3), PS2 (PCSX2) emulators, and PC games.
     """
 
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
         """
-        Inicializa o ambiente.
+        Initialize the environment.
         
         Args:
-            config: Dicionario com configuracoes do jogo. 
-                   Se None, usa o processo 're9' (Resident Evil Requiem).
+            config: Dictionary with the game settings. 
+                   If None, uses the 're9' process (Resident Evil Requiem).
         """
         super().__init__()
         
-        # Configuracoes
+        # Configuration
         if config is None:
             try:
                 import sys
@@ -71,7 +71,7 @@ class GenericGameEnv(gym.Env):
         self.exe_path = config.get("exe_path")
         self.hide_window = config.get("hide_window", False)
         
-        # Captura
+        # Capture
         cap = config.get("capture", {})
         self.width = cap.get("width", 854)
         self.height = cap.get("height", 480)
@@ -80,14 +80,14 @@ class GenericGameEnv(gym.Env):
         self.target_fps = cap.get("target_fps", 240)
         self.buffer_len = cap.get("buffer_len", 1)
         
-        # Offsets da janela
+        # Window offsets
         self.win_off = config.get("window_offset", {"left": 20, "top": 100, "right": 0, "bottom": 0})
         
-        # Espaco de acoes (18 acoes binarias por padrao)
+        # Action space (18 binary actions by default)
         self.num_actions = config.get("actions", {}).get("num_actions", 18)
         self.action_space = gym.spaces.MultiBinary(self.num_actions)
         
-        # Espaco de observacao (imagem Grayscale)
+        # Observation space (Grayscale image)
         self.observation_space = gym.spaces.Box(
             low=0,
             high=255,
@@ -103,7 +103,7 @@ class GenericGameEnv(gym.Env):
             self.frame_time = 1.0 / self.target_fps
             return
             
-        # Encontrar/Abrir o jogo
+        # Find/Open the game
         self.hwnd = self.find_window_by_process_name(self.process_name)
         self.pid = None
         
@@ -118,11 +118,11 @@ class GenericGameEnv(gym.Env):
         
         self.wait_start()
         
-        # Gamepad virtual (Xbox 360 / XInput)
+        # Virtual gamepad (Xbox 360 / XInput)
         self.gamepad = vg.VX360Gamepad()
         self.prev_keys = set()
         
-        # Camera (captura de tela acelerada por GPU)
+        # Camera (GPU-accelerated screen capture)
         self.camera = None
         self.mss_sct = None
         try:
@@ -142,7 +142,7 @@ class GenericGameEnv(gym.Env):
         self.frame_time = 1.0 / self.target_fps
     
     def _get_window_region(self) -> tuple:
-        """Retorna a regiao da janela para captura."""
+        """Return the window region to capture."""
         left, top, right, bot = win32gui.GetWindowRect(self.hwnd)
         return (
             left + self.win_off.get("left", 20),
@@ -152,31 +152,31 @@ class GenericGameEnv(gym.Env):
         )
     
     def render(self, mode="human"):
-        """Retorna o frame atual capturado."""
+        """Return the current captured frame."""
         return self.img
     
     def reset(self, seed=None, options=None) -> Tuple[np.ndarray, dict]:
-        """Reseta o ambiente."""
+        """Reset the environment."""
         super().reset(seed=seed, options=options)
         self.prev_keys = set()
         observation = self._get_observation()
         return observation, {}
     
     def step(self, actions: np.ndarray):
-        """Executa uma acao no jogo."""
+        """Execute an action in the game."""
         frame_start = time.perf_counter()
         
         if not len(actions) > 1:
             actions = actions[0]
         
-        # --- Converter acoes do vetor para o gamepad virtual ---
+        # --- Convert vector actions to the virtual gamepad ---
         current = set()
         x_value = 0
         y_value = 0
         right_x = 0
         right_y = 0
         
-        # D-Pad / Stick Esquerdo
+        # D-Pad / Left Stick
         if actions[0] > 0:  # UP
             current.add(-2)
             y_value = -1.0
@@ -190,7 +190,7 @@ class GenericGameEnv(gym.Env):
             current.add(-2)
             x_value = 1.0
         
-        # Botoes de face
+        # Face buttons
         if actions[4] > 0:
             current.add(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
         if actions[5] > 0:
@@ -208,7 +208,7 @@ class GenericGameEnv(gym.Env):
         if actions[9] > 0:
             current.add(vg.XUSB_BUTTON.XUSB_GAMEPAD_LEFT_THUMB)
         
-        # Stick Direito X (camera)
+        # Right Stick X (camera)
         if np.any(actions[10:14] == 1):
             current.add(-3)
             if actions[10]: right_x = 0.5
@@ -216,7 +216,7 @@ class GenericGameEnv(gym.Env):
             if actions[12]: right_x = -0.5
             if actions[13]: right_x = -1
         
-        # Stick Direito Y (camera)
+        # Right Stick Y (camera)
         if np.any(actions[14:18] == 1):
             current.add(-3)
             if actions[14]: right_y = -0.5
@@ -224,7 +224,7 @@ class GenericGameEnv(gym.Env):
             if actions[16]: right_y = 0.5
             if actions[17]: right_y = 1
         
-        # --- Aplicar comandos no gamepad ---
+        # --- Apply commands to the gamepad ---
         for b in current - self.prev_keys:
             if b > 0:
                 self.gamepad.press_button(b)
@@ -238,7 +238,7 @@ class GenericGameEnv(gym.Env):
         if -5 in current:
             self.gamepad.right_trigger(value=255)
         
-        # Liberar botoes nao pressionados
+        # Release buttons not pressed
         for b in self.prev_keys - current:
             if b > 0:
                 self.gamepad.release_button(b)
@@ -254,12 +254,12 @@ class GenericGameEnv(gym.Env):
         self.gamepad.update()
         self.prev_keys = current.copy()
         
-        # Obter nova observacao
+        # Get new observation
         observation = self._get_observation()
         return observation, 0.0, False, False, {}
     
     def _get_observation(self) -> np.ndarray:
-        """Captura a tela do jogo e redimensiona."""
+        """Capture the game screen and resize it."""
         frame = None
         if self.camera is not None:
             frame = self.camera.get_latest_frame()
@@ -284,7 +284,7 @@ class GenericGameEnv(gym.Env):
         return resized
     
     def find_window_by_process_name(self, process_name: str) -> Optional[int]:
-        """Encontra a janela do jogo pelo nome do processo."""
+        """Find the game window by process name."""
         def callback(hwnd, result):
             if win32gui.IsWindowVisible(hwnd):
                 tid, win_pid = win32process.GetWindowThreadProcessId(hwnd)
@@ -301,7 +301,7 @@ class GenericGameEnv(gym.Env):
         return result[0] if result else None
     
     def wait_start(self) -> None:
-        """Aguarda o jogo iniciar ate timeout de 2 minutos."""
+        """Wait for the game to start, up to a 2 minute timeout."""
         timeout = 120
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -309,14 +309,14 @@ class GenericGameEnv(gym.Env):
             if self.hwnd:
                 print(f"Window founded HWND: {self.hwnd}.")
                 
-                # Esconder janela (opcional)
+                # Hide window (optional)
                 if self.hide_window:
                     print("Hiding window...")
                     rect = win32gui.GetWindowRect(self.hwnd)
                     x, y, w, h = rect[0], rect[1], rect[2]-rect[0], rect[3]-rect[1]
                     win32gui.MoveWindow(self.hwnd, -w, -h, w, h, True)
                 
-                # Atualizar regiao de captura
+                # Update capture region
                 self.region = self._get_window_region()
                 break
             print("Waiting for game window...")
@@ -326,11 +326,11 @@ class GenericGameEnv(gym.Env):
 
 
 # ============================================================
-# EXTRACTOR DE FEATURES LSTM TEMPORAL
+# TEMPORAL LSTM FEATURE EXTRACTOR
 # ============================================================
 
 class SpatialAttention(nn.Module):
-    """Atencao espacial para focar nos elementos relevantes da tela."""
+    """Spatial attention to focus on the relevant elements of the screen."""
     def __init__(self, in_channels):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, 1, kernel_size=1)
@@ -342,8 +342,8 @@ class SpatialAttention(nn.Module):
 
 class TemporalAttentionLSTM(BaseFeaturesExtractor):
     """
-    Extractor de features com CNN + LSTM + Atencao Temporal.
-    Permite que a IA lembre o que aconteceu nos ultimos 10 frames.
+    Feature extractor with CNN + LSTM + temporal attention.
+    Lets the AI remember what happened in the last 10 frames.
     """
     def __init__(self, 
                  observation_space: gym.spaces.Box,
@@ -358,7 +358,7 @@ class TemporalAttentionLSTM(BaseFeaturesExtractor):
         self.frame_width = observation_space.shape[2]
         self.debug = debug
         
-        # CNN para extrair features espaciais
+        # CNN to extract spatial features
         self.cnn = nn.Sequential(
             nn.Conv2d(self.n_frames, 32, kernel_size=5, stride=2, padding=2),
             nn.BatchNorm2d(32),
@@ -382,7 +382,7 @@ class TemporalAttentionLSTM(BaseFeaturesExtractor):
         self.lstm_num_layers = lstm_num_layers
         self.lstm_hidden_size = lstm_hidden_size
         
-        # LSTM bidirecional para capturar contexto temporal
+        # Bidirectional LSTM to capture temporal context
         self.lstm = nn.LSTM(
             input_size=512,
             hidden_size=lstm_hidden_size,
@@ -392,14 +392,14 @@ class TemporalAttentionLSTM(BaseFeaturesExtractor):
             dropout=0.2
         )
         
-        # Atencao temporal (quais frames sao mais importantes?)
+        # Temporal attention (which frames are the most important?)
         self.attention = nn.Sequential(
             nn.Linear(lstm_hidden_size * 2, lstm_hidden_size * 2),
             nn.Tanh(),
             nn.Linear(lstm_hidden_size * 2, 1)
         )
         
-        # Camada linear final
+        # Final linear layer
         self.linear = nn.Sequential(
             nn.Linear(lstm_hidden_size * 2, 1024),
             nn.BatchNorm1d(1024),
@@ -415,7 +415,7 @@ class TemporalAttentionLSTM(BaseFeaturesExtractor):
         self.feature_buffer = deque(maxlen=self.window_size)
     
     def repackage_hidden(self, h):
-        """Desconecta o historico computacional para evitar memory leak."""
+        """Detach the computation history to avoid a memory leak."""
         if isinstance(h, th.Tensor):
             return h.detach()
         else:
@@ -425,16 +425,16 @@ class TemporalAttentionLSTM(BaseFeaturesExtractor):
         batch_size = observations.shape[0]
         device = observations.device
         
-        # Normalizar imagem
+        # Normalize image
         x = observations.float()
         if x.max() > 1.0:
             x = x / 255.0
         x = (x - 0.5) / 0.5
         
-        # Extrair features CNN
+        # Extract CNN features
         cnn_features = self.cnn(x)
         
-        # Atualizar buffer temporal
+        # Update temporal buffer
         if batch_size == 1:
             self.feature_buffer.append(cnn_features.detach())
         else:
@@ -442,16 +442,16 @@ class TemporalAttentionLSTM(BaseFeaturesExtractor):
             for i in range(len(self.feature_buffer) - 1):
                 self.feature_buffer[i] = self.feature_buffer[i].detach()
         
-        # Preencher buffer ate atingir window size
+        # Fill the buffer until it reaches the window size
         if len(self.feature_buffer) == 1:
             while len(self.feature_buffer) < self.window_size:
                 self.feature_buffer.append(self.feature_buffer[-1])
         
-        # Stacar sequencia temporal
+        # Stack the temporal sequence
         sequence = th.stack(list(self.feature_buffer), dim=1)
         sequence.requires_grad_(True)
         
-        # Resetar hidden state se necessario
+        # Reset hidden state if needed
         should_reset = (
             self.hidden_reset or 
             self.hidden_state is None or 
@@ -468,20 +468,20 @@ class TemporalAttentionLSTM(BaseFeaturesExtractor):
         else:
             current_hidden = self.repackage_hidden(self.hidden_state)
         
-        # Passar pelo LSTM
+        # Pass through the LSTM
         lstm_out, last_hidden = self.lstm(sequence, current_hidden)
         self.hidden_state = last_hidden
         
-        # Aplicar atencao temporal
+        # Apply temporal attention
         attention_weights = th.softmax(self.attention(lstm_out), dim=1)
         context = th.sum(attention_weights * lstm_out, dim=1)
         
-        # Mapear para features finais
+        # Map to final features
         features = self.linear(context)
         return features
     
     def reset_hidden(self, dones=None):
-        """Reseta o estado LSTM (deve ser chamado entre episodios)."""
+        """Reset the LSTM state (must be called between episodes)."""
         self.hidden_state = None
         self.hidden_reset = True
         self.feature_buffer.clear()

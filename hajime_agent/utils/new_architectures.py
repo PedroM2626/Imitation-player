@@ -1,8 +1,8 @@
 """
-Novas Arquiteturas de Extratores de Características para Imitation Learning.
-Inclui:
-- ImpalaCNNExtractor (Impala original com Flatten)
-- ResNet18Extractor (ResNet-18 adaptada para 4 canais)
+New feature extractor architectures for Imitation Learning.
+Includes:
+- ImpalaCNNExtractor (original Impala with Flatten)
+- ResNet18Extractor (ResNet-18 adapted for 4 channels)
 """
 
 import torch as th
@@ -12,7 +12,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 import torchvision.models as models
 
 # ============================================================
-# 1. IMPALA CNN (Original com Flatten)
+# 1. IMPALA CNN (Original with Flatten)
 # ============================================================
 
 class ResidualBlock(nn.Module):
@@ -49,8 +49,8 @@ class ImpalaBlock(nn.Module):
 
 class ImpalaCNNExtractor(BaseFeaturesExtractor):
     """
-    Impala CNN Extractor com Flatten (arquitetura padrão do artigo IMPALA).
-    Achata a saída convolucional total, preservando informações espaciais detalhadas.
+    Impala CNN extractor with Flatten (standard architecture from the IMPALA paper).
+    Flattens the whole convolutional output, preserving detailed spatial information.
     """
     def __init__(self, 
                  observation_space: gym.spaces.Box,
@@ -92,12 +92,12 @@ class ImpalaCNNExtractor(BaseFeaturesExtractor):
 
 
 # ============================================================
-# 2. RESNET-18 (Torchvision Adaptado)
+# 2. RESNET-18 (Torchvision Adapted)
 # ============================================================
 
 class ResNet18Extractor(BaseFeaturesExtractor):
     """
-    ResNet-18 Extractor adaptada para canais arbitrários e com cabeçalho de projeção linear.
+    ResNet-18 extractor adapted for arbitrary channel counts, with a linear projection head.
     """
     def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 512):
         super().__init__(observation_space, features_dim)

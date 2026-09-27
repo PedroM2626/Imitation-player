@@ -1,6 +1,6 @@
 """
-Script de gravacao de trajetorias humanas para jogos genericos.
-Adaptado de imitatation-record.ipynb para ser mais simples e generico.
+Human trajectory recording script for generic games.
+Adapted from imitatation-record.ipynb to be simpler and more generic.
 """
 
 import time
@@ -16,7 +16,7 @@ import torch as th
 import os
 import sys
 
-# Ajuste o path para encontrar os modulos
+# Adjust the path so the modules can be found
 sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../utils"))
 
@@ -27,7 +27,7 @@ from config.game_config import GAME_CONFIG
 
 
 class TrajectoryRecorder:
-    """Gravador de trajetorias para Imitation Learning."""
+    """Trajectory recorder for Imitation Learning."""
     
     def __init__(self, env, demo_path='demos/', max_traj=10, screen_size=(854, 480)):
         self.env = env
@@ -42,7 +42,7 @@ class TrajectoryRecorder:
         
         os.makedirs(demo_path, exist_ok=True)
         
-        # Estado do controle
+        # Gamepad state
         self.state = {k: 0 for k in ["UP", "DOWN", "LEFT", "RIGHT", "A", "B", "X", 
                                        "START", "CAM_X", "CAM_Y", "LT", "RT", "L3"]}
         self.lock = threading.Lock()
@@ -51,13 +51,13 @@ class TrajectoryRecorder:
         self.renderer = None
         
     def start_recording(self):
-        """Inicia o processo de gravacao."""
+        """Start the recording process."""
         print("Done! Press 'K' to start/stop the record.")
         
-        # Inicializar pygame
+        # Initialize pygame
         pygame.init()
         
-        # Inicializar XInput (ctypes)
+        # Initialize XInput (ctypes)
         try:
             self.xinput = ctypes.windll.xinput1_4
         except AttributeError:
@@ -86,7 +86,7 @@ class TrajectoryRecorder:
         while self.count_record < self.max_traj:
             loop_start = time.time()
             
-            # Bombeamento de eventos Pygame (evita que a janela trave no Windows) e check de saida
+            # Pygame event pumping (keeps the window from freezing on Windows) and exit check
             force_exit = False
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -96,16 +96,16 @@ class TrajectoryRecorder:
                 print("\nExiting and saving trajectories...")
                 break
             
-            # Verificar toggle de gravacao
+            # Check the recording toggle
             if keyboard.is_pressed('k'):
                 is_running = not is_running
                 time.sleep(0.3)
                 print(f"Recording: {is_running}")
             
-            # Capturar entrada do teclado e joystick
+            # Capture keyboard and joystick input
             action.fill(0)
             
-            # Teclado
+            # Keyboard
             if keyboard.is_pressed('up'): action[0] = 1
             if keyboard.is_pressed('down'): action[1] = 1
             if keyboard.is_pressed('left'): action[2] = 1
@@ -116,8 +116,8 @@ class TrajectoryRecorder:
             
             # XInput (Global Background Controller Capture)
             if hasattr(self, 'xinput') and self.xinput:
-                # Ler apenas o controle fisico (Slot 0) para evitar o feedback loop 
-                # de ler as teclas pressionadas no proprio controle virtual da IA
+                # Read only the physical gamepad (Slot 0) to avoid the feedback loop
+                # of reading the buttons pressed on the AI's own virtual gamepad
                 for j_idx in range(1):
                     state = self.XINPUT_STATE()
                     if self.xinput.XInputGetState(j_idx, ctypes.byref(state)) == 0:
@@ -128,26 +128,26 @@ class TrajectoryRecorder:
                         if buttons & 0x0004: action[2] = 1 # LEFT
                         if buttons & 0x0008: action[3] = 1 # RIGHT
                         
-                        # Analogico esquerdo
+                        # Left analog stick
                         if state.Gamepad.sThumbLY > 16000: action[0] = 1 # UP
                         if state.Gamepad.sThumbLY < -16000: action[1] = 1 # DOWN
                         if state.Gamepad.sThumbLX < -16000: action[2] = 1 # LEFT
                         if state.Gamepad.sThumbLX > 16000: action[3] = 1 # RIGHT
                         
-                        # Botoes de face (A=0x1000, B=0x2000, X=0x4000, Y=0x8000)
+                        # Face buttons (A=0x1000, B=0x2000, X=0x4000, Y=0x8000)
                         if buttons & 0x1000: action[4] = 1 # A / Cross
                         if buttons & 0x2000: action[5] = 1 # B / Circle
                         if buttons & 0x4000: action[6] = 1 # X / Square
             
-            # Outros botoes podem ser mapeados aqui
+            # Other buttons can be mapped here
             
-            # Executar acao no ambiente
+            # Run the action in the environment
             action_input = [action.reshape(1, -1)]
             obs, _, _, _ = self.env.step(action_input)
             
-            # Renderizar
+            # Render
             if obs is not None:
-                # O formato e (4, 84, 84). O ultimo canal e o frame GRAY atual.
+                # Shape is (4, 84, 84). The last channel is the current GRAY frame.
                 img_gray = obs[0, -1, :, :].copy()
                 img_rgb = cv2.cvtColor(img_gray, cv2.COLOR_GRAY2RGB).astype(np.uint8)
                 
@@ -155,11 +155,11 @@ class TrajectoryRecorder:
                                         interpolation=cv2.INTER_NEAREST)
                 color = (0, 255, 0) if is_running else (0, 0, 255)
                 
-                # Usar surfarray igual ao run_ai.py para evitar bugs de flatten() com cores
+                # Use surfarray as in run_ai.py to avoid flatten() color bugs
                 surface = pygame.surfarray.make_surface(img_resized.swapaxes(0, 1))
                 window.blit(surface, (0, 0))
                 
-                # Texto de status
+                # Status text
                 fps_text = font.render(f"FPS: {int(actual_fps)}", True, (255, 255, 255))
                 count_text = font.render(f"Demos: {self.count_record}/{self.max_traj}", True, (255, 255, 255))
                 status_text = font.render("RECORDING" if is_running else "IDLE", True, color)
@@ -172,9 +172,9 @@ class TrajectoryRecorder:
                 
                 pygame.display.flip()
             
-            # Gravar trajetoria
+            # Record trajectory
             if is_running:
-                # np.squeeze remove a dimensao de lote (batch=1) vinda do DummyVecEnv
+                # np.squeeze drops the batch dimension (batch=1) coming from DummyVecEnv
                 obs_to_save = np.squeeze(obs, axis=0)
                 if not self.is_recording:
                     self.recorded_obs.append(obs_to_save)
@@ -182,19 +182,19 @@ class TrajectoryRecorder:
                 self.recorded_actions.append(action.copy())
                 self.is_recording = True
             elif self.is_recording:
-                print(f"Finalizando trajetoria {self.count_record}...")
+                print(f"Finalizing trajectory {self.count_record}...")
                 obs_uint8 = np.stack([o.astype(np.uint8) for o in self.recorded_obs], axis=0)
                 traj = Trajectory(obs=obs_uint8, acts=np.array(self.recorded_actions), 
                                   infos=None, terminal=False)
                 
-                # Salvar a trajetoria em arquivo individual
+                # Save the trajectory to its own file
                 timestamp = time.strftime("%Y%m%d_%H%M%S")
                 save_file = os.path.join(self.demo_path, f"demo_{self.count_record}_{timestamp}.pt")
                 th.save([traj], save_file)
-                print(f"[OK] Trajetoria salva com sucesso em: {save_file}")
+                print(f"[OK] Trajectory saved successfully to: {save_file}")
                 
-                # Contabilizar e limpar a memoria
-                self.trajectories.append(traj) # Adiciona so pra contagem do laco principal
+                # Increment the count and clear memory
+                self.trajectories.append(traj) # Added only for the main loop count
                 self.recorded_obs, self.recorded_actions = [], []
                 self.count_record += 1
                 self.is_recording = False
@@ -206,12 +206,12 @@ class TrajectoryRecorder:
                 fps_avg = 0
                 fps_start_time = time.time()
         
-        # O salvamento agora ocorre no bloco finally da main()
+        # Saving now happens in main()'s finally block
         pass
 
 
 def main():
-    """Funcao principal para iniciar gravacao."""
+    """Main function to start recording."""
     def make_env():
         return GenericGameEnv(GAME_CONFIG)
     
@@ -220,7 +220,7 @@ def main():
     env = VecFrameStack(env, n_stack=4)
     env.reset()
     
-    # Gravar trajetorias
+    # Record trajectories
     recorder = TrajectoryRecorder(env, demo_path='./demos/', max_traj=10)
     
     try:
@@ -228,8 +228,8 @@ def main():
     except KeyboardInterrupt:
         print("\nProcess interrupted by user (Ctrl+C).")
     finally:
-        # As trajetorias ja sao salvas iterativamente! Nao precisa salvar no finally
-        print("\nProcesso de gravacao concluido.")
+        # Trajectories are already saved incrementally! No need to save in the finally block
+        print("\nRecording process completed.")
         
         try:
             pygame.quit()

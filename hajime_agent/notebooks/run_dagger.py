@@ -1,6 +1,6 @@
 """
-Script de DAgger Interativo para Hajime no Ippo (Xbox Controller).
-Alterna dinamicamente entre IA e Humano para corrigir erros da IA.
+Interactive DAgger script for Hajime no Ippo (Xbox Controller).
+Dynamically toggles between AI and human to correct the AI's mistakes.
 """
 
 import sys
@@ -26,7 +26,7 @@ from game_env import GenericGameEnv
 from utils import get_last_index, LSTMWrapper
 from config.game_config import GAME_CONFIG
 
-# --- CONFIGURACAO ---
+# --- CONFIGURATION ---
 DEVICE = th.device("cuda" if th.cuda.is_available() else "cpu")
 SCREEN_WIDTH = 854
 SCREEN_HEIGHT = 480
@@ -82,8 +82,8 @@ class RendererThread(threading.Thread):
                     count_txt = font.render(f"Demos: {self.count}/{MAX_TRAJ}", True, (255, 255, 255))
                     status_color = (0, 255, 0) if self.color == (0, 255, 0) else (255, 0, 0)
                     rec_txt = font.render("RECORDING" if self.color == (0, 255, 0) else "IDLE", True, status_color)
-                    ai_txt = font.render("CONTROLE: IA" if self.action_from_ai else "CONTROLE: HUMANO", True, (200, 200, 255))
-                    instr_txt = font.render("[K] Rec  [L] Toggle IA/Humano  [ESC] Exit", True, (200, 200, 200))
+                    ai_txt = font.render("CONTROL: AI" if self.action_from_ai else "CONTROL: HUMAN", True, (200, 200, 255))
+                    instr_txt = font.render("[K] Rec  [L] Toggle AI/Human  [ESC] Exit", True, (200, 200, 200))
                     
                     window.blit(fps_txt, (10, 10))
                     window.blit(count_txt, (10, 40))
@@ -182,7 +182,7 @@ def main():
             num_actions = GAME_CONFIG["actions"].get("num_actions", 18)
             action = np.zeros((1, num_actions), dtype=np.float32)
             
-            # Pegar acao manual
+            # Read the manual action
             manual_action = np.zeros((1, num_actions), dtype=np.float32)
             
             # XInput Controller
@@ -206,7 +206,7 @@ def main():
                         if buttons & 0x4000: manual_action[0][6] = 1 # X / Square
 
             if is_recording:
-                # Previsao da IA
+                # AI prediction
                 aggressiveness = GAME_CONFIG.get("aggressiveness", 1.0)
                 if aggressiveness == 1.0:
                     pred_act, _ = policy.predict(obs, deterministic=False)
@@ -251,7 +251,7 @@ def main():
                 recorded_actions.append(action[0])
                 is_recording = True
             elif is_recording:
-                print(f"Finalizando trajetoria {count_record}...")
+                print(f"Finalizing trajectory {count_record}...")
                 obs_to_save = []
                 for o in recorded_obs:
                     if o.ndim == 4: # SB3 Vectorized output
@@ -265,7 +265,7 @@ def main():
                 timestamp = time.strftime("%Y%m%d_%H%M%S")
                 save_file = os.path.join(DEMO_PATH, f"dagger_demo_{count_record}_{timestamp}.pt")
                 th.save([traj], save_file)
-                print(f"[OK] DAgger Trajetoria salva com sucesso em: {save_file}")
+                print(f"[OK] DAgger trajectory saved successfully to: {save_file}")
                 
                 trajectories.append(traj)
                 recorded_obs, recorded_actions = [], []
@@ -284,7 +284,7 @@ def main():
     finally:
         renderer.running = False
         pygame.quit()
-        print("Processo concluido. Os dados DAgger foram salvos na pasta demos/ e serao usados no proximo treino!")
+        print("Process completed. The DAgger data was saved to the demos/ folder and will be used in the next training run!")
 
 if __name__ == "__main__":
     main()

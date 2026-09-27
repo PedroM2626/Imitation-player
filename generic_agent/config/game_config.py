@@ -1,73 +1,73 @@
 """
-Configuracao Generica para Qualquer Jogo
-Ajuste estas variaveis de acordo com o jogo que voce quer treinar.
+Generic configuration for any game
+Adjust these variables for the game you want to train.
 """
 
 # ==============================================
-# CONFIGURACAO DO JOGO (ALTERE AQUI)
+# GAME CONFIGURATION (EDIT HERE)
 # ==============================================
 
 GAME_CONFIG = {
-    # Processo do jogo ou emulador
-    # Exemplos: "rpcs3" (PS3), "pcsx2-qt" (PS2), "dolphin" (Wii/GameCube), 
-    #           "re9" (Resident Evil Requiem), "hajime_no_ippo" (exemplo)
+    # Game or emulator process name
+    # Examples: "rpcs3" (PS3), "pcsx2-qt" (PS2), "dolphin" (Wii/GameCube), 
+    #           "re9" (Resident Evil Requiem), "hajime_no_ippo" (example)
     "process_name": "RobloxPlayerBeta",
     
-    # Caminho para o executavel do jogo (opcional - deixe None se ja estiver aberto)
-    # Exemplo: R"C:\Games\RPCS3\rpcs3.exe"
-    # Ou para Steam: R"C:\Program Files (x86)\Steam\steam.exe -applaunch APPID"
+    # Path to the game executable (optional - leave None if it is already open)
+    # Example: R"C:\Games\RPCS3\rpcs3.exe"
+    # Or for Steam: R"C:\Program Files (x86)\Steam\steam.exe -applaunch APPID"
     "exe_path": None,
     
-    # Caminho para a ROM do jogo
+    # Path to the game ROM
     "rom_path": None,
     
-    # Configuracoes da captura de tela
+    # Screen capture settings
     "capture": {
-        # Ajuste-vos conforme a resolucao em que o jogo sera jogado
-        # O modelo usa 128x128 internamente, mas essa e a resolucao bruta capturada
-        "width": 854,       # Largura da captura (ex: 854 para 480p, 1280 para 720p)
-        "height": 480,      # Altura da captura
-        "internal_width": 128,    # Resolucao que o modelo processa
-        "internal_height": 128,   # Resolucao que o modelo processa
-        "target_fps": 60,       # FPS alvo da captura
-        "buffer_len": 1,         # Buffer do DXCam (1 = mais rapido, 3 = mais suave)
+        # Set this to the resolution the game will be played at
+        # The model uses 128x128 internally; this is the raw captured resolution
+        "width": 854,       # Capture width (e.g. 854 for 480p, 1280 for 720p)
+        "height": 480,      # Capture height
+        "internal_width": 128,    # Resolution the model processes
+        "internal_height": 128,   # Resolution the model processes
+        "target_fps": 60,       # Target capture FPS
+        "buffer_len": 1,         # DXCam buffer (1 = faster, 3 = smoother)
     },
     
-    # Offset da janela (ajuste se necessario para evitar bordas/menu do emulador)
+    # Window offset (adjust if needed to avoid emulator borders/menus)
     "window_offset": {
-        "left": 20,     # pixels a esquerda do rect da janela
-        "top": 100,     # pixels do topo (pular a barra de titulo, etc.)
-        "right": 0,     # pixels a direita
-        "bottom": 0,    # pixels de baixo
+        "left": 20,     # pixels to the left of the window rect
+        "top": 100,     # pixels from the top (skip the title bar, etc.)
+        "right": 0,     # pixels to the right
+        "bottom": 0,    # pixels from the bottom
     },
     
     # ===========================================
-    # MAPEAMENTO DE ACOES (ALTERE CONFORME O JOGO)
+    # ACTION MAPPING (ADJUST PER GAME)
     # ===========================================
-    # Ajuste as acoes de acordo com o seu jogo.
-    # O tamanho da lista define o numero de acoes.
-    # Cada acao e binaria (0 ou 1).
+    # Adjust the actions to match your game.
+    # The list length defines the number of actions.
+    # Each action is binary (0 or 1).
     "actions": {
-        # Numero de acoes (default: 9). Altere aqui se necessario.
+        # Number of actions (default: 9). Change here if needed.
         "num_actions": 9,
         
-        # Define se a IA vai usar "gamepad" (controle Xbox) ou "keyboard_mouse" (teclado e mouse)
+        # Whether the agent uses "gamepad" (Xbox controller) or "keyboard_mouse" (keyboard and mouse)
         "input_mode": "keyboard_mouse", 
         
-        # Mapeamento dos botoes. Para adicionar mais, basta criar uma nova linha e aumentar o num_actions.
+        # Button mapping. To add more, add a new entry and raise num_actions.
         "mappings": [
-            # Teclado WASD
+            # WASD keys
             {"name": "W", "type": "key", "key": "w"},
             {"name": "A", "type": "key", "key": "a"},
             {"name": "S", "type": "key", "key": "s"},
             {"name": "D", "type": "key", "key": "d"},
             
-            # Teclas extras
+            # Extra keys
             {"name": "SPACE", "type": "key", "key": "space"},
             {"name": "F", "type": "key", "key": "f"},
             {"name": "R", "type": "key", "key": "r"},
             
-            # Botoes do Mouse
+            # Mouse buttons
             {"name": "CLICK_L", "type": "mouse_button", "button": "left"},
             {"name": "CLICK_R", "type": "mouse_button", "button": "right"},
         ]
@@ -76,29 +76,29 @@ GAME_CONFIG = {
 
 
 # ==============================================
-# CONFIGURACAO DO TREINAMENTO
+# TRAINING CONFIGURATION
 # ==============================================
 
 TRAINING_CONFIG = {
-    # numero maximo de trajetorias por sessao de gravacao (limite baixo para evitar MemoryError ao salvar)
+    # max trajectories per recording session (low cap to avoid MemoryError when saving)
     "max_trajectories": 3,
     
-    # tamanho do batch para treinamento
+    # training batch size
     "batch_size": 384,
     
-    # numero de epocas de treinamento
+    # number of training epochs
     "epochs": 100,
     
     # learning rate
     "learning_rate": 1e-4,
     
-    # tamanho do buffer temporal (LSTM window)
+    # temporal buffer size (LSTM window)
     "window_size": 10,
     
-    # numero de passos DAGGER
+    # number of DAgger steps
     "dagger_iterations": 3,
     
-    # diretorios
+    # directories
     "demo_path": "./demos/",
     "model_path": "./models/",
     "train_path": "./models/imitation/",
@@ -106,22 +106,22 @@ TRAINING_CONFIG = {
 
 
 # ==============================================
-# CONFIGURACAO DO CONTROLE (INPUT)
+# INPUT CONFIGURATION
 # ==============================================
 
 INPUT_CONFIG = {
-    # Deadzone para sticks analogicos (0-1)
-    "deadzone": 0.3,  # 30% do movimento maximo
+    # Deadzone for analog sticks (0-1)
+    "deadzone": 0.3,  # 30% of full stick travel
     
-    # sensibilidade da camera (multiplicador do stick direito)
+    # camera sensitivity (right stick multiplier)
     "camera_sensitivity": 1.0,
     
-    # Delay entre leituras do gamepad (segundos)
+    # Delay between gamepad reads (seconds)
     "input_delay": 0.01,
     
-    # FATOR DE AGRESSIVIDADE (Multiplicador de probabilidade para botoes do mouse)
-    # 1.0 = Normal (A IA so bate se tiver certeza)
-    # 2.0 = Agressivo (A IA bate com metade da certeza necessaria)
-    # 3.0 = Muito Agressivo (A IA spamma ataques na menor intencao)
+    # AGGRESSIVENESS FACTOR (probability multiplier for mouse buttons)
+    # 1.0 = Normal (agent only clicks when confident)
+    # 2.0 = Aggressive (agent clicks at half the confidence needed)
+    # 3.0 = Very aggressive (agent spams attacks at the slightest intent)
     "aggressiveness": 2.0,
 }

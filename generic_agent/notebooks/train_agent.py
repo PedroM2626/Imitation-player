@@ -1,41 +1,41 @@
 """
-Tutorial Completo: Como Treinar um Agente de Imitation Learning
+Complete Tutorial: How to Train an Imitation Learning Agent
 ================================================================
 
-Este script guia voce passo-a-passo pelo processo de treinamento
-de um agente que joga qualquer jogo usando Imitation Learning.
+This script guides you step-by-step through the training process
+of an agent that plays any game using Imitation Learning.
 
-ETAPAS DO TREINAMENTO:
+TRAINING STAGES:
 =====================
-1. COLETA DE DADOS (gravar voce jogando)
-2. PREPARACAO DOS DADOS
-3. TREINAMENTO INICIAL (Behavioral Cloning)
-4. TESTE DO AGENTE
-5. REFINAMENTO (DAGGER - opcional mas recomendado)
-6. RETREINAMENTO
+1. DATA COLLECTION (record yourself playing)
+2. DATA PREPARATION
+3. INITIAL TRAINING (Behavioral Cloning)
+4. AGENT TESTING
+5. REFINEMENT (DAGGER - optional but recommended)
+6. RETRAINING
 
-REQUISITOS:
+REQUIREMENTS:
 ============
-- Python 3.9+ (3.11 recomendado)
-- GPU NVIDIA com CUDA (opcional mas acelera MUITO)
-- Dados de demonstracao (trajetorias)
+- Python 3.9+ (3.11 recommended)
+- NVIDIA GPU with CUDA (optional but much faster)
+- Demonstration data (trajectories)
 
-COMO USAR:
+HOW TO USE:
 ==========
-1. Grabe trajetorias usando record_trajectories.py
-2. Confira que os arquivos .pt estao em demos/
-3. Execute: python train_agent.py
-4. O modelo sera salvo em models/bc_policy.zip
+1. Record trajectories using record_trajectories.py
+2. Make sure the .pt files are in demos/
+3. Run: python train_agent.py
+4. The model is saved to models/bc_policy.zip
 
-COMANDO:
+COMMAND:
     python train_agent.py --epochs 50 --batch 384 --lr 1e-4
 
-ARGUMENTOS:
-    --epochs    : Numero de epocas (default: 100)
-    --batch     : Tamanho do batch (default: 384)
+ARGUMENTS:
+    --epochs    : Number of epochs (default: 100)
+    --batch     : Batch size (default: 384)
     --lr        : Learning rate (default: 1e-4)
-    --dagger    : Rodar iteracao DAgger apos treino
-    --device    : 'cuda' ou 'cpu' (default: auto)
+    --dagger    : Run DAgger iteration after training
+    --device    : 'cuda' or 'cpu' (default: auto)
 """
 
 import os
@@ -44,7 +44,7 @@ import glob
 import argparse
 from typing import List, Tuple, Optional, Dict, Any
 
-# Ajustar path para encontrar os modulos
+# Adjust path to find the modules
 sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../utils"))
 
@@ -54,7 +54,7 @@ import torch.nn as nn
 from pathlib import Path
 import pickle
 
-# Bibliotecas de Machine Learning
+# Machine Learning libraries
 from imitation.algorithms.bc import BC
 from imitation.data.types import Trajectory
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage, VecFrameStack
@@ -63,7 +63,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.logger import KVWriter, Logger, HumanOutputFormat, CSVOutputFormat
 
-# Modulos locais
+# Local modules
 from game_env import GenericGameEnv, TemporalAttentionLSTM
 from config.game_config import GAME_CONFIG, TRAINING_CONFIG
 
@@ -84,27 +84,27 @@ class MLflowOutputFormat(KVWriter):
 
 
 def print_header(title: str) -> None:
-    """Imprime um cabecalho formatado na tela."""
+    """Print a formatted header to the console."""
     print("\n" + "=" * 70)
     print(f"  {title}")
     print("=" * 70 + "\n")
 
 
 def check_cuda() -> str:
-    """Verifica se CUDA esta disponivel e retorna o device."""
+    """Check if CUDA is available and return the device."""
     if th.cuda.is_available():
         device = "cuda"
-        print(f"[OK] GPU detectada: {th.cuda.get_device_name(0)}")
+        print(f"[OK] GPU detected: {th.cuda.get_device_name(0)}")
         print(f"     CUDA version: {th.version.cuda}")
     else:
         device = "cpu"
-        print("[!] CUDA nao encontrada, usando CPU (mais lento!)")
+        print("[!] CUDA not found, using CPU (slower!)")
     return device
 
 
 class DataManager:
     """
-    Gerencia os dados de treinamento (trajetorias).
+    Manages the training data (trajectories).
     """
     
     def __init__(self, demo_path: str = './demos/'):
@@ -114,34 +114,34 @@ class DataManager:
     
     def load_demos(self, verbose: bool = True) -> List[Trajectory]:
         """
-        Carrega todas as trajetorias do diretorio demos/.
+        Loads all trajectories from the demos/ directory.
         
         Returns:
-            Lista de objetos Trajectory
+            List of Trajectory objects
         """
-        print_header("1. CARREGANDO DADOS")
+        print_header("1. LOADING DATA")
         
         if not self.demo_path.exists():
             raise FileNotFoundError(
-                f"Diretorio {self.demo_path} nao encontrado!\n"
-                "Grave trajetorias primeiro com record_trajectories.py"
+                f"Directory {self.demo_path} not found!\n"
+                "Record trajectories first with record_trajectories.py"
             )
         
-        # Encontrar todos os arquivos de demo
+        # Find all demo files
         demo_files = sorted(self.demo_path.glob('demo*.pt'))
         
         if not demo_files:
             raise FileNotFoundError(
-                f"Nenhum arquivo de demo encontrado em {self.demo_path}\n"
-                "Execute record_trajectories.py primeiro!"
+                f"No demo files found in {self.demo_path}\n"
+                "Run record_trajectories.py first!"
             )
         
-        print(f"Encontrados {len(demo_files)} arquivos de demo:")
+        print(f"Found {len(demo_files)} demo files:")
         
         all_trajectories = []
         for i, demo_file in enumerate(demo_files):
             try:
-                print(f"  [{i+1}/{len(demo_files)}] Carregando {demo_file.name}...", end=" ")
+                print(f"  [{i+1}/{len(demo_files)}] Loading {demo_file.name}...", end=" ")
                 data = th.load(demo_file, map_location='cpu')
                 
                 expected_num_actions = GAME_CONFIG.get("actions", {}).get("num_actions", 18)
@@ -181,12 +181,12 @@ class DataManager:
                     print("(1 traj.)")
                     
             except Exception as e:
-                print(f" ERRO: {e}")
+                print(f" ERROR: {e}")
                 continue
         
         self.trajectories = all_trajectories
         
-        # Calcular estatisticas
+        # Compute statistics
         total_frames = sum(len(t.obs) for t in all_trajectories)
         self.stats = {
             'num_trajectories': len(all_trajectories),
@@ -195,25 +195,25 @@ class DataManager:
         }
         
         if verbose:
-            print(f"\n[OK] Dados carregados:")
-            print(f"     - {self.stats['num_trajectories']} trajetorias")
-            print(f"     - {self.stats['total_frames']} frames totais")
-            print(f"     - {self.stats['avg_frames_per_traj']:.1f} frames/trajetoria (media)")
+            print(f"\n[OK] Data loaded:")
+            print(f"     - {self.stats['num_trajectories']} trajectories")
+            print(f"     - {self.stats['total_frames']} total frames")
+            print(f"     - {self.stats['avg_frames_per_traj']:.1f} frames/trajectory (mean)")
         
         return all_trajectories
     
     def get_stats(self) -> Dict[str, Any]:
-        """Retorna estatisticas dos dados."""
+        """Return statistics about the data."""
         return self.stats
     
     def describe_actions(self) -> None:
-        """Imprime distribuicao das acoes (uso de cada botao)."""
+        """Print the action distribution (usage of each button)."""
         if not self.trajectories:
-            print("Nenhum dado carregado!")
+            print("No data loaded!")
             return
         
         num_actions = GAME_CONFIG.get("actions", {}).get("num_actions", 18)
-        print(f"\nDistribuicao das acoes (0-{num_actions-1}):")
+        print(f"\nAction distribution (0-{num_actions-1}):")
         action_counts = np.zeros(num_actions)
         action_total = 0
         
@@ -225,7 +225,7 @@ class DataManager:
             for frame_acts in acts:
                 action_counts += frame_acts
         
-        # Obter nomes pelo config ou usar genericos
+        # Get names from the config or use generic ones
         action_names = []
         mappings = GAME_CONFIG.get("actions", {}).get("mappings", [])
         if len(mappings) >= num_actions:
@@ -244,12 +244,12 @@ class DataManager:
             bar = "█" * int(pct / 2)
             print(f"  [{i:2d}] {name:12s}: {bar} {pct:.1f}% ({int(count)}x)")
         
-        print(f"\nTotal: {action_total} frames analisados")
+        print(f"\nTotal: {action_total} frames analyzed")
 
 
 class Trainer:
     """
-    Gerencia o treinamento do agente usando Imitation Learning.
+    Manages agent training using Imitation Learning.
     """
     
     def __init__(self, 
@@ -267,15 +267,15 @@ class Trainer:
         self.epochs = epochs
         self.model_save_path = model_save_path
         
-        # Ambiente para as politicas do SB3
+        # Environment for the SB3 policies
         self.env = self._create_env()
         
-        # Trainer de Behavioral Cloning
+        # Behavioral Cloning trainer
         self.bc_trainer = None
         self.policy = None
     
     def _create_env(self):
-        """Cria o ambiente base do Stable Baselines3."""
+        """Create the base Stable Baselines3 environment."""
         train_config = self.config.copy()
         train_config["dummy"] = True
         env = GenericGameEnv(train_config)
@@ -286,14 +286,14 @@ class Trainer:
     
     def setup_bc_trainer(self, trajectories: List[Trajectory], model_path: str = None):
         """
-        Configura o treinador de Behavioral Cloning.
+        Set up the Behavioral Cloning trainer.
         
         Args:
-            trajectories: Lista de trajetorias para treinar
+            trajectories: List of trajectories to train on
         """
-        print_header("2. CONFIGURANDO O TREINADOR")
+        print_header("2. SETTING UP THE TRAINER")
         
-        # Gerador de numeros aleatorios
+        # Random number generator
         rng = np.random.default_rng(seed=42)
         
         # Log formatters
@@ -305,11 +305,11 @@ class Trainer:
         from stable_baselines3.common.policies import ActorCriticCnnPolicy
         policy = None
         if model_path and os.path.exists(model_path):
-            print(f"[+] Transfer Learning ativado! Carregando: {model_path}")
-            # BC save_policy salva apenas a policy (nao o PPO inteiro), logo usamos ActorCriticCnnPolicy
+            print(f"[+] Transfer Learning enabled! Loading: {model_path}")
+            # BC save_policy stores only the policy (not the full PPO), so we use ActorCriticCnnPolicy
             policy = ActorCriticCnnPolicy.load(model_path, device=self.device)
         elif model_path:
-            print(f"[!] Aviso: Modelo '{model_path}' nao encontrado. Treinando do zero.")
+            print(f"[!] Warning: model '{model_path}' not found. Training from scratch.")
             
         self.bc_trainer = BC(
             observation_space=self.env.observation_space,
@@ -323,19 +323,19 @@ class Trainer:
             custom_logger=custom_sb3_logger,
         )
         
-        print(f"[OK] BC Trainer configurado:")
+        print(f"[OK] BC Trainer configured:")
         print(f"     Batch size: {self.batch_size}")
         print(f"     Learning rate: {self.learning_rate}")
         print(f"     Device: {self.device}")
     
     def train(self, save_path: str = './models/'):
         """
-        Executa o treinamento completo.
+        Run the full training.
         
         Returns:
-            O modelo treinado (ActorCriticPolicy)
+            The trained model (ActorCriticPolicy)
         """
-        print_header("3. TREINAMENTO - Behavioral Cloning")
+        print_header("3. TRAINING - Behavioral Cloning")
         
         os.makedirs(save_path, exist_ok=True)
         
@@ -344,18 +344,18 @@ class Trainer:
             progress_bar=True,
         )
         
-        print(f"\n[OK] Treinamento concluido!")
+        print(f"\n[OK] Training complete!")
         
-        # Salvar o modelo
+        # Save the model
         model_path = os.path.join(save_path, "bc_policy.zip")
         self.bc_trainer.policy.save(model_path)
-        print(f"[OK] Modelo salvo em: {model_path}")
+        print(f"[OK] Model saved to: {model_path}")
         
         self.policy = self.bc_trainer.policy
         return self.policy
     
     def save_checkpoint(self, name: str = "checkpoint", save_dir: str = './models/checkpoints/'):
-        """Salva um checkpoint (copia do modelo)."""
+        """Save a checkpoint (copy of the model)."""
         os.makedirs(save_dir, exist_ok=True)
         if self.policy:
             path = os.path.join(save_dir, f"{name}.zip")
@@ -368,45 +368,45 @@ def run_dagger_iteration(config: Dict[str, Any],
                          current_model_path: str, 
                          demo_path: str = './demos/dagger/'):
     """
-    Executa uma iteracao de DAGGER (Dataset Aggregation).
+    Run a DAGGER (Dataset Aggregation) iteration.
     """
-    print("\n[DAGGER] Iteracao de refinamento...")
+    print("\n[DAGGER] Refinement iteration...")
     pass
 
 
 def main():
-    # ===== PARSING DE ARGUMENTOS =====
+    # ===== ARGUMENT PARSING =====
     parser = argparse.ArgumentParser(
-        description="Treina um agente de Imitation Learning para jogar qualquer jogo",
+        description="Train an Imitation Learning agent that plays any game",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Exemplos:
+Examples:
   python train_agent.py --epochs 50 --lr 1e-4
   python train_agent.py --batch 256 --device cpu
-  python train_agent.py --dagger  # Inclui iteracao DAgger
+  python train_agent.py --dagger  # Include DAgger iteration
         """)
     
-    parser.add_argument('--epochs', type=int, default=TRAINING_CONFIG.get("epochs", 100), help='Numero de epocas')
-    parser.add_argument('--batch', type=int, default=TRAINING_CONFIG.get("batch_size", 384), help='Tamanho do batch')
+    parser.add_argument('--epochs', type=int, default=TRAINING_CONFIG.get("epochs", 100), help='Number of epochs')
+    parser.add_argument('--batch', type=int, default=TRAINING_CONFIG.get("batch_size", 384), help='Batch size')
     parser.add_argument('--lr', type=float, default=TRAINING_CONFIG.get("learning_rate", 1e-4), help='Learning rate')
-    parser.add_argument('--dagger', action='store_true', help='Executar DAgger apos treino')
-    parser.add_argument("--device", type=str, default="cuda", help="Device para treinamento (cuda/cpu)")
-    parser.add_argument("--model_path", type=str, default=None, help="Caminho para modelo (.zip) pre-treinado (Transfer Learning)")
+    parser.add_argument('--dagger', action='store_true', help='Run DAgger after training')
+    parser.add_argument("--device", type=str, default="cuda", help="Device for training (cuda/cpu)")
+    parser.add_argument("--model_path", type=str, default=None, help="Path to a pretrained model (.zip) for Transfer Learning")
     
     args = parser.parse_args()
     
-    print_header("IMITATION LEARNING - TREINAMENTO")
+    print_header("IMITATION LEARNING - TRAINING")
     
-    # ===== VERIFICACOES INICIAIS =====
+    # ===== INITIAL CHECKS =====
     device = args.device or check_cuda()
-    print(f"\n[CONFIG] Epocas: {args.epochs}, Batch: {args.batch}, LR: {args.lr}, Device: {device}")
+    print(f"\n[CONFIG] Epochs: {args.epochs}, Batch: {args.batch}, LR: {args.lr}, Device: {device}")
     
-    # ===== CONFIGURACAO DO MLFLOW =====
+    # ===== MLFLOW SETUP =====
     mlflow.set_tracking_uri("file:../mlruns")
     mlflow.set_experiment("Hajime_no_Ippo_Imitation_Learning")
     
     with mlflow.start_run(run_name="BC_Training") as run:
-        # Registrar hiperparametros
+        # Log hyperparameters
         mlflow.log_param("epochs", args.epochs)
         mlflow.log_param("batch_size", args.batch)
         mlflow.log_param("learning_rate", args.lr)
@@ -414,12 +414,12 @@ Exemplos:
         mlflow.log_param("model_type", "imitation_learning_bc")
         
         try:
-            # ===== PASSO 1: CARREGAR DADOS =====
+            # ===== STEP 1: LOAD DATA =====
             data_manager = DataManager(demo_path='./demos/')
             trajectories = data_manager.load_demos(verbose=True)
             data_manager.describe_actions()
             
-            # ===== PASSO 2: CONFIGURAR TREINADOR =====
+            # ===== STEP 2: SET UP THE TRAINER =====
             trainer = Trainer(
                 config=GAME_CONFIG,
                 device=device,
@@ -428,25 +428,25 @@ Exemplos:
                 epochs=args.epochs
             )
             
-            # ===== PASSO 3: TREINAR =====
+            # ===== STEP 3: TRAIN =====
             trainer.setup_bc_trainer(trajectories, model_path=args.model_path)
             trained_policy = trainer.train(save_path='./models/')
             
-            # Registrar artefatos
+            # Log artifacts
             mlflow.log_artifact('./models/bc_policy.zip', artifact_path="model")
             
-            # ===== PASSO 4: (OPCIONAL) DAGGER =====
+            # ===== STEP 4: (OPTIONAL) DAGGER =====
             if args.dagger:
                 run_dagger_iteration(GAME_CONFIG, './models/bc_policy.zip')
             
-            print_header("TREINAMENTO CONCLUIDO")
-            print("Proximos passos:")
-            print("  1. Teste o modelo: python run_ai.py")
-            print("  2. Se precisar melhorar, use DAGGER: imitation-hg-dagger.ipynb")
-            print("  3. Quando satisfeito, use o modelo final para jogar automaticamente!")
+            print_header("TRAINING COMPLETE")
+            print("Next steps:")
+            print("  1. Test the model: python run_ai.py")
+            print("  2. If you need to improve it, use DAGGER: imitation-hg-dagger.ipynb")
+            print("  3. Once satisfied, use the final model to play automatically!")
             
         except Exception as e:
-            print(f"\n[ERRO] Falha no treinamento: {e}")
+            print(f"\n[ERROR] Training failed: {e}")
             import traceback
             traceback.print_exc()
             sys.exit(1)

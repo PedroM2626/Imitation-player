@@ -1,20 +1,20 @@
 """
-Tutorial: Treinar Agente com Arquitetura CNN+LSTM+Attention
+Tutorial: Training an Agent with a CNN+LSTM+Attention Architecture
 ============================================================
 
-Este script usa o TemporalAttentionLSTM como feature extractor,
-que combina CNN para visao espacial com LSTM bidirecional para
-memoria temporal e Attention para focar nos frames mais relevantes.
+This script uses TemporalAttentionLSTM as the feature extractor,
+which combines a CNN for spatial vision with a bidirectional LSTM for
+temporal memory and Attention to focus on the most relevant frames.
 
-A diferenca para o train_agent.py padrao e que aqui o modelo
-tem MEMORIA: ele lembra o que aconteceu nos ultimos 10 frames,
-permitindo entender velocidade, direcao de movimento e padroes
-temporais de ataque do inimigo.
+Unlike the default train_agent.py, here the model
+has MEMORY: it remembers what happened in the last 10 frames,
+making it possible to understand speed, movement direction and
+temporal attack patterns of the enemy.
 
-COMO USAR:
+HOW TO USE:
     python train_agent_lstm.py --epochs 50 --batch 384 --lr 1e-4
 
-O modelo sera salvo em models/bc_policy_lstm.zip
+The model is saved to models/bc_policy_lstm.zip
 """
 
 import os
@@ -23,7 +23,7 @@ import glob
 import argparse
 from typing import List, Tuple, Optional, Dict, Any
 
-# Ajustar path para encontrar os modulos
+# Adjust path to find the modules
 sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../utils"))
 
@@ -33,7 +33,7 @@ import torch.nn as nn
 from pathlib import Path
 import pickle
 
-# Bibliotecas de Machine Learning
+# Machine Learning libraries
 from imitation.algorithms.bc import BC
 from imitation.data.types import Trajectory
 from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage, VecFrameStack
@@ -42,7 +42,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.policies import ActorCriticPolicy, ActorCriticCnnPolicy
 from stable_baselines3.common.logger import KVWriter, Logger, HumanOutputFormat, CSVOutputFormat
 
-# Modulos locais
+# Local modules
 from game_env import GenericGameEnv, TemporalAttentionLSTM
 from config.game_config import GAME_CONFIG, TRAINING_CONFIG
 
@@ -62,26 +62,26 @@ class MLflowOutputFormat(KVWriter):
 
 
 def print_header(title: str) -> None:
-    """Imprime um cabecalho formatado na tela."""
+    """Print a formatted header to the console."""
     print("\n" + "=" * 70)
     print(f"  {title}")
     print("=" * 70 + "\n")
 
 
 def check_cuda() -> str:
-    """Verifica se CUDA esta disponivel e retorna o device."""
+    """Check if CUDA is available and return the device."""
     if th.cuda.is_available():
         device = "cuda"
-        print(f"[OK] GPU detectada: {th.cuda.get_device_name(0)}")
+        print(f"[OK] GPU detected: {th.cuda.get_device_name(0)}")
         print(f"     CUDA version: {th.version.cuda}")
     else:
         device = "cpu"
-        print("[!] CUDA nao encontrada, usando CPU (mais lento!)")
+        print("[!] CUDA not found, using CPU (slower!)")
     return device
 
 
 class DataManager:
-    """Gerencia os dados de treinamento (trajetorias)."""
+    """Manages the training data (trajectories)."""
     
     def __init__(self, demo_path: str = './demos/'):
         self.demo_path = Path(demo_path)
@@ -89,29 +89,29 @@ class DataManager:
         self.stats = {}
     
     def load_demos(self, verbose: bool = True) -> List[Trajectory]:
-        """Carrega todas as trajetorias do diretorio demos/."""
-        print_header("1. CARREGANDO DADOS")
+        """Loads all trajectories from the demos/ directory."""
+        print_header("1. LOADING DATA")
         
         if not self.demo_path.exists():
             raise FileNotFoundError(
-                f"Diretorio {self.demo_path} nao encontrado!\n"
-                "Grave trajetorias primeiro com record_trajectories.py"
+                f"Directory {self.demo_path} not found!\n"
+                "Record trajectories first with record_trajectories.py"
             )
         
         demo_files = sorted(self.demo_path.glob('demo*.pt'))
         
         if not demo_files:
             raise FileNotFoundError(
-                f"Nenhum arquivo de demo encontrado em {self.demo_path}\n"
-                "Execute record_trajectories.py primeiro!"
+                f"No demo files found in {self.demo_path}\n"
+                "Run record_trajectories.py first!"
             )
         
-        print(f"Encontrados {len(demo_files)} arquivos de demo:")
+        print(f"Found {len(demo_files)} demo files:")
         
         all_trajectories = []
         for i, demo_file in enumerate(demo_files):
             try:
-                print(f"  [{i+1}/{len(demo_files)}] Carregando {demo_file.name}...", end=" ")
+                print(f"  [{i+1}/{len(demo_files)}] Loading {demo_file.name}...", end=" ")
                 data = th.load(demo_file, map_location='cpu')
                 
                 expected_num_actions = GAME_CONFIG.get("actions", {}).get("num_actions", 18)
@@ -149,7 +149,7 @@ class DataManager:
                     print("(1 traj.)")
                     
             except Exception as e:
-                print(f" ERRO: {e}")
+                print(f" ERROR: {e}")
                 continue
         
         self.trajectories = all_trajectories
@@ -162,10 +162,10 @@ class DataManager:
         }
         
         if verbose:
-            print(f"\n[OK] Dados carregados:")
-            print(f"     - {self.stats['num_trajectories']} trajetorias")
-            print(f"     - {self.stats['total_frames']} frames totais")
-            print(f"     - {self.stats['avg_frames_per_traj']:.1f} frames/trajetoria (media)")
+            print(f"\n[OK] Data loaded:")
+            print(f"     - {self.stats['num_trajectories']} trajectories")
+            print(f"     - {self.stats['total_frames']} total frames")
+            print(f"     - {self.stats['avg_frames_per_traj']:.1f} frames/trajectory (mean)")
         
         return all_trajectories
     
@@ -173,13 +173,13 @@ class DataManager:
         return self.stats
     
     def describe_actions(self) -> None:
-        """Imprime distribuicao das acoes (uso de cada botao)."""
+        """Print the action distribution (usage of each button)."""
         if not self.trajectories:
-            print("Nenhum dado carregado!")
+            print("No data loaded!")
             return
         
         num_actions = GAME_CONFIG.get("actions", {}).get("num_actions", 18)
-        print(f"\nDistribuicao das acoes (0-{num_actions-1}):")
+        print(f"\nAction distribution (0-{num_actions-1}):")
         action_counts = np.zeros(num_actions)
         action_total = 0
         
@@ -209,11 +209,11 @@ class DataManager:
             bar = "\u2588" * int(pct / 2)
             print(f"  [{i:2d}] {name:12s}: {bar} {pct:.1f}% ({int(count)}x)")
         
-        print(f"\nTotal: {action_total} frames analisados")
+        print(f"\nTotal: {action_total} frames analyzed")
 
 
 class LSTMTrainer:
-    """Gerencia o treinamento do agente usando CNN+LSTM+Attention."""
+    """Manages agent training using CNN+LSTM+Attention."""
     
     def __init__(self, 
                  config: Dict[str, Any],
@@ -235,7 +235,7 @@ class LSTMTrainer:
         self.policy = None
     
     def _create_env(self):
-        """Cria o ambiente base do Stable Baselines3."""
+        """Create the base Stable Baselines3 environment."""
         train_config = self.config.copy()
         train_config["dummy"] = True
         env = GenericGameEnv(train_config)
@@ -245,8 +245,8 @@ class LSTMTrainer:
         return env
     
     def setup_bc_trainer(self, trajectories: List[Trajectory], model_path: str = None):
-        """Configura o treinador de Behavioral Cloning com LSTM."""
-        print_header("2. CONFIGURANDO O TREINADOR (CNN+LSTM+Attention)")
+        """Set up the Behavioral Cloning trainer with LSTM."""
+        print_header("2. SETTING UP THE TRAINER (CNN+LSTM+Attention)")
         
         rng = np.random.default_rng(seed=42)
         
@@ -255,7 +255,7 @@ class LSTMTrainer:
         output_formats = [HumanOutputFormat(sys.stdout), CSVOutputFormat(os.path.join(log_dir, "progress.csv")), MLflowOutputFormat()]
         custom_sb3_logger = Logger(folder=log_dir, output_formats=output_formats)
         
-        # Configurar o TemporalAttentionLSTM como feature extractor
+        # Configure TemporalAttentionLSTM as the feature extractor
         policy_kwargs = dict(
             features_extractor_class=TemporalAttentionLSTM,
             features_extractor_kwargs=dict(
@@ -268,13 +268,13 @@ class LSTMTrainer:
         
         policy = None
         if model_path and os.path.exists(model_path):
-            print(f"[+] Transfer Learning ativado! Carregando: {model_path}")
+            print(f"[+] Transfer Learning enabled! Loading: {model_path}")
             policy = ActorCriticCnnPolicy.load(model_path, device=self.device)
         elif model_path:
-            print(f"[!] Aviso: Modelo '{model_path}' nao encontrado. Treinando do zero.")
+            print(f"[!] Warning: model '{model_path}' not found. Training from scratch.")
         
         if policy is None:
-            print("[*] Criando policy com TemporalAttentionLSTM...")
+            print("[*] Creating policy with TemporalAttentionLSTM...")
             policy = ActorCriticCnnPolicy(
                 observation_space=self.env.observation_space,
                 action_space=self.env.action_space,
@@ -294,17 +294,17 @@ class LSTMTrainer:
             custom_logger=custom_sb3_logger,
         )
         
-        # Contar parametros
+        # Count parameters
         num_params = sum(p.numel() for p in policy.parameters())
-        print(f"[OK] BC Trainer configurado (CNN+LSTM+Attention):")
+        print(f"[OK] BC Trainer configured (CNN+LSTM+Attention):")
         print(f"     Batch size: {self.batch_size}")
         print(f"     Learning rate: {self.learning_rate}")
         print(f"     Device: {self.device}")
-        print(f"     Parametros: {num_params:,}")
+        print(f"     Parameters: {num_params:,}")
     
     def train(self, save_path: str = './models/'):
-        """Executa o treinamento completo."""
-        print_header("3. TREINAMENTO - CNN+LSTM+Attention Behavioral Cloning")
+        """Run the full training."""
+        print_header("3. TRAINING - CNN+LSTM+Attention Behavioral Cloning")
         
         os.makedirs(save_path, exist_ok=True)
         
@@ -313,11 +313,11 @@ class LSTMTrainer:
             progress_bar=True,
         )
         
-        print(f"\n[OK] Treinamento concluido!")
+        print(f"\n[OK] Training complete!")
         
         model_path = os.path.join(save_path, "bc_policy_lstm.zip")
         self.bc_trainer.policy.save(model_path)
-        print(f"[OK] Modelo salvo em: {model_path}")
+        print(f"[OK] Model saved to: {model_path}")
         
         self.policy = self.bc_trainer.policy
         return self.policy
@@ -325,26 +325,26 @@ class LSTMTrainer:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Treina agente com arquitetura CNN+LSTM+Attention",
+        description="Train an agent with a CNN+LSTM+Attention architecture",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Exemplos:
+Examples:
   python train_agent_lstm.py --epochs 50 --lr 1e-4
   python train_agent_lstm.py --batch 256 --device cpu
         """)
     
-    parser.add_argument('--epochs', type=int, default=TRAINING_CONFIG.get("epochs", 100), help='Numero de epocas')
-    parser.add_argument('--batch', type=int, default=TRAINING_CONFIG.get("batch_size", 384), help='Tamanho do batch')
+    parser.add_argument('--epochs', type=int, default=TRAINING_CONFIG.get("epochs", 100), help='Number of epochs')
+    parser.add_argument('--batch', type=int, default=TRAINING_CONFIG.get("batch_size", 384), help='Batch size')
     parser.add_argument('--lr', type=float, default=TRAINING_CONFIG.get("learning_rate", 1e-4), help='Learning rate')
-    parser.add_argument("--device", type=str, default="cuda", help="Device para treinamento (cuda/cpu)")
-    parser.add_argument("--model_path", type=str, default=None, help="Caminho para modelo (.zip) pre-treinado (Transfer Learning)")
+    parser.add_argument("--device", type=str, default="cuda", help="Device for training (cuda/cpu)")
+    parser.add_argument("--model_path", type=str, default=None, help="Path to a pretrained model (.zip) for Transfer Learning")
     
     args = parser.parse_args()
     
-    print_header("IMITATION LEARNING - TREINAMENTO (CNN+LSTM+Attention)")
+    print_header("IMITATION LEARNING - TRAINING (CNN+LSTM+Attention)")
     
     device = args.device or check_cuda()
-    print(f"\n[CONFIG] Epocas: {args.epochs}, Batch: {args.batch}, LR: {args.lr}, Device: {device}")
+    print(f"\n[CONFIG] Epochs: {args.epochs}, Batch: {args.batch}, LR: {args.lr}, Device: {device}")
     
     # MLflow
     mlflow.set_tracking_uri("file:../mlruns")
@@ -363,12 +363,12 @@ Exemplos:
         mlflow.log_param("window_size", 10)
         
         try:
-            # Passo 1: Carregar dados
+            # Step 1: Load data
             data_manager = DataManager(demo_path='./demos/')
             trajectories = data_manager.load_demos(verbose=True)
             data_manager.describe_actions()
             
-            # Passo 2: Configurar treinador
+            # Step 2: Set up the trainer
             trainer = LSTMTrainer(
                 config=GAME_CONFIG,
                 device=device,
@@ -377,20 +377,20 @@ Exemplos:
                 epochs=args.epochs
             )
             
-            # Passo 3: Treinar
+            # Step 3: Train
             trainer.setup_bc_trainer(trajectories, model_path=args.model_path)
             trained_policy = trainer.train(save_path='./models/')
             
-            # Registrar artefatos
+            # Log artifacts
             mlflow.log_artifact('./models/bc_policy_lstm.zip', artifact_path="model")
             
-            print_header("TREINAMENTO CONCLUIDO (CNN+LSTM+Attention)")
-            print("Proximos passos:")
-            print("  1. Teste o modelo: python run_ai_lstm.py")
-            print("  2. Compare com outros modelos: python compare_models.py")
+            print_header("TRAINING COMPLETE (CNN+LSTM+Attention)")
+            print("Next steps:")
+            print("  1. Test the model: python run_ai_lstm.py")
+            print("  2. Compare with other models: python compare_models.py")
             
         except Exception as e:
-            print(f"\n[ERRO] Falha no treinamento: {e}")
+            print(f"\n[ERROR] Training failed: {e}")
             import traceback
             traceback.print_exc()
             sys.exit(1)

@@ -1,14 +1,14 @@
 """
-Treinamento do Agente de Imitation Learning com Impoola-CNN
+Training the Imitation Learning Agent with Impoola-CNN
 ===========================================================
 
-Este script treina um agente usando a arquitetura Impoola-CNN, que combina
-blocos residenciais (tipo Impala) com Global Average Pooling (GAP).
-Isso resulta em um modelo muito menor, invariante a translações e altamente generalizável.
+This script trains an agent using the Impoola-CNN architecture, which combines
+residual blocks (Impala-style) with Global Average Pooling (GAP).
+This yields a much smaller model that is translation-invariant and highly generalizable.
 
-Após o término do treinamento, o script extrai as métricas de tempo, loss final,
-tamanho do modelo e número de parâmetros, atualizando automaticamente os arquivos
-README.md e comparison_results.md.
+Once training finishes, the script extracts the timing, final loss,
+model size and parameter count metrics, automatically updating the
+README.md and comparison_results.md files.
 """
 
 import os
@@ -18,7 +18,7 @@ import argparse
 from typing import List, Dict, Any
 from pathlib import Path
 
-# Ajustar path para encontrar os módulos
+# Adjust the path so the modules can be found
 sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../utils"))
 
@@ -31,7 +31,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage, Vec
 from stable_baselines3.common.logger import KVWriter, Logger, HumanOutputFormat, CSVOutputFormat
 from stable_baselines3.common.policies import ActorCriticCnnPolicy
 
-# Módulos locais
+# Local modules
 from game_env import GenericGameEnv
 from config.game_config import GAME_CONFIG
 from impoola_cnn import ImpoolaCNNExtractor
@@ -39,11 +39,11 @@ from impoola_cnn import ImpoolaCNNExtractor
 import mlflow
 
 # ============================================================
-# Captura de métricas para MLflow
+# Metric capture for MLflow
 # ============================================================
 
 class MetricCapture(KVWriter):
-    """Captura o último valor de cada métrica logada pelo BC trainer."""
+    """Captures the last value of each metric logged by the BC trainer."""
     def __init__(self):
         self.metrics: Dict[str, float] = {}
 
@@ -55,7 +55,7 @@ class MetricCapture(KVWriter):
 
 
 class MLflowOutputFormat(KVWriter):
-    """Loga métricas diretamente no MLflow durante o treino."""
+    """Logs metrics directly to MLflow during training."""
     def __init__(self, prefix: str = ""):
         self.prefix = prefix
 
@@ -79,19 +79,19 @@ def print_header(title: str) -> None:
 def load_demos(demo_path: str = "./demos/") -> List[Trajectory]:
     demo_dir = Path(demo_path)
     if not demo_dir.exists():
-        raise FileNotFoundError(f"Diretório {demo_dir} não encontrado!")
+        raise FileNotFoundError(f"Directory {demo_dir} not found!")
         
     demo_files = sorted(demo_dir.glob("demo*.pt"))
     if not demo_files:
-        raise FileNotFoundError(f"Nenhum arquivo demo*.pt encontrado em {demo_dir}")
+        raise FileNotFoundError(f"No demo*.pt files found in {demo_dir}")
         
     expected_num_actions = GAME_CONFIG.get("actions", {}).get("num_actions", 18)
     all_trajectories: List[Trajectory] = []
     
-    print(f"Carregando {len(demo_files)} arquivos de demo:")
+    print(f"Loading {len(demo_files)} demo files:")
     for i, demo_file in enumerate(demo_files):
         try:
-            print(f"  [{i+1}/{len(demo_files)}] Carregando {demo_file.name}...", end=" ")
+            print(f"  [{i+1}/{len(demo_files)}] Loading {demo_file.name}...", end=" ")
             data = th.load(demo_file, map_location="cpu")
             items = data if isinstance(data, list) else [data]
             count = 0
@@ -111,10 +111,10 @@ def load_demos(demo_path: str = "./demos/") -> List[Trajectory]:
                 count += 1
             print(f"({count} traj.)")
         except Exception as e:
-            print(f" ERRO: {e}")
+            print(f" ERROR: {e}")
             
     total_frames = sum(len(t.obs) for t in all_trajectories)
-    print(f"\n[OK] Dados carregados: {len(all_trajectories)} trajetórias, {total_frames} frames totais.")
+    print(f"\n[OK] Data loaded: {len(all_trajectories)} trajectories, {total_frames} total frames.")
     return all_trajectories
 
 
@@ -137,13 +137,13 @@ def get_model_size_mb(path: str) -> float:
 
 
 # ============================================================
-# Atualização automática dos arquivos Markdown
+# Automatic update of the Markdown files
 # ============================================================
 
 def update_markdown_files(impoola_results: Dict[str, Any]):
-    print_header("ATUALIZANDO DOCUMENTACAO")
+    print_header("UPDATING DOCUMENTATION")
     
-    # Baselines obtidos anteriormente para os outros modelos (10 épocas)
+    # Baselines collected earlier for the other models (10 epochs)
     baselines = {
         "NatureCNN": {
             "final_loss": 3.476316,
@@ -171,7 +171,7 @@ def update_markdown_files(impoola_results: Dict[str, Any]):
         }
     }
     
-    # Determinar melhores e piores para formatação inteligente do README
+    # Determine best and worst values for smart README formatting
     losses = {k: v["final_loss"] for k, v in baselines.items() if not np.isnan(v["final_loss"])}
     times = {k: v["training_time"] for k, v in baselines.items()}
     sizes = {k: v["model_size_mb"] for k, v in baselines.items()}
@@ -189,44 +189,44 @@ def update_markdown_files(impoola_results: Dict[str, Any]):
     best_params = min(params, key=params.get)
     worst_params = max(params, key=params.get)
     
-    # Função auxiliar para formatar células do README
+    # Helper function to format README cells
     def fmt_cell(model_key, val, best_key, worst_key, val_type):
         is_best = (model_key == best_key)
         is_worst = (model_key == worst_key)
         
         if val_type == "loss":
             base_str = f"{val:.2f}"
-            suffix = " *(Melhor)*" if is_best else (" *(Pior)*" if is_worst else "")
+            suffix = " *(Best)*" if is_best else (" *(Worst)*" if is_worst else "")
         elif val_type == "time":
             if val > 60:
-                base_str = f"{val/60:.1f} minutos"
+                base_str = f"{val/60:.1f} minutes"
             else:
-                base_str = f"{val:.1f} segundos"
-            suffix = " *(Mais Rápido)*" if is_best else (" *(Pesadíssimo)*" if is_worst else "")
+                base_str = f"{val:.1f} seconds"
+            suffix = " *(Fastest)*" if is_best else (" *(Slowest)*" if is_worst else "")
         elif val_type == "size":
             base_str = f"{val:.2f} MB"
-            suffix = " *(O mais leve!)*" if is_best else (" *(Mais Pesado)*" if is_worst else "")
+            suffix = " *(Lightest!)*" if is_best else (" *(Heaviest)*" if is_worst else "")
         elif val_type == "params":
-            base_str = f"{val/1e6:.2f} Milhões"
-            suffix = " *(Mais Eficiente)*" if is_best else (" *(Menos Eficiente)*" if is_worst else "")
+            base_str = f"{val/1e6:.2f} Million"
+            suffix = " *(Most Efficient)*" if is_best else (" *(Least Efficient)*" if is_worst else "")
             
         if is_best:
             return f"**`{base_str}`**{suffix}"
         return f"`{base_str}`{suffix}"
 
-    # 1. Atualizar README.md
+    # 1. Update README.md
     readme_path = Path("../../README.md")
     if readme_path.exists():
-        print(f"Atualizando {readme_path.resolve()}...")
+        print(f"Updating {readme_path.resolve()}...")
         readme_content = readme_path.read_text(encoding="utf-8")
         
-        # Gerar a tabela com 4 colunas de modelos
-        new_table = f"""| Métrica | NatureCNN (Padrão) | CNN + LSTM + Attention | Vision Transformer (ViT) | Impoola-CNN (GAP) |
+        # Generate the table with the 4 model columns
+        new_table = f"""| Metric | NatureCNN (Default) | CNN + LSTM + Attention | Vision Transformer (ViT) | Impoola-CNN (GAP) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Poder de Aprendizado (Loss Final)** | {fmt_cell("NatureCNN", baselines["NatureCNN"]["final_loss"], best_loss, worst_loss, "loss")} | {fmt_cell("CNN_LSTM", baselines["CNN_LSTM"]["final_loss"], best_loss, worst_loss, "loss")} | {fmt_cell("ViT_Transformer", baselines["ViT_Transformer"]["final_loss"], best_loss, worst_loss, "loss")} | {fmt_cell("Impoola_CNN", baselines["Impoola_CNN"]["final_loss"], best_loss, worst_loss, "loss")} |
-| **Tempo de Treinamento** | {fmt_cell("NatureCNN", baselines["NatureCNN"]["training_time"], best_time, worst_time, "time")} | {fmt_cell("CNN_LSTM", baselines["CNN_LSTM"]["training_time"], best_time, worst_time, "time")} | {fmt_cell("ViT_Transformer", baselines["ViT_Transformer"]["training_time"], best_time, worst_time, "time")} | {fmt_cell("Impoola_CNN", baselines["Impoola_CNN"]["training_time"], best_time, worst_time, "time")} |
-| **Peso do Arquivo Final** | {fmt_cell("NatureCNN", baselines["NatureCNN"]["model_size_mb"], best_size, worst_size, "size")} | {fmt_cell("CNN_LSTM", baselines["CNN_LSTM"]["model_size_mb"], best_size, worst_size, "size")} | {fmt_cell("ViT_Transformer", baselines["ViT_Transformer"]["model_size_mb"], best_size, worst_size, "size")} | {fmt_cell("Impoola_CNN", baselines["Impoola_CNN"]["model_size_mb"], best_size, worst_size, "size")} |
-| **Quantidade de Parâmetros (Neurônios)** | {fmt_cell("NatureCNN", baselines["NatureCNN"]["num_params"], best_params, worst_params, "params")} | {fmt_cell("CNN_LSTM", baselines["CNN_LSTM"]["num_params"], best_params, worst_params, "params")} | {fmt_cell("ViT_Transformer", baselines["ViT_Transformer"]["num_params"], best_params, worst_params, "params")} | {fmt_cell("Impoola_CNN", baselines["Impoola_CNN"]["num_params"], best_params, worst_params, "params")} |"""
+| **Learning Power (Final Loss)** | {fmt_cell("NatureCNN", baselines["NatureCNN"]["final_loss"], best_loss, worst_loss, "loss")} | {fmt_cell("CNN_LSTM", baselines["CNN_LSTM"]["final_loss"], best_loss, worst_loss, "loss")} | {fmt_cell("ViT_Transformer", baselines["ViT_Transformer"]["final_loss"], best_loss, worst_loss, "loss")} | {fmt_cell("Impoola_CNN", baselines["Impoola_CNN"]["final_loss"], best_loss, worst_loss, "loss")} |
+| **Training Time** | {fmt_cell("NatureCNN", baselines["NatureCNN"]["training_time"], best_time, worst_time, "time")} | {fmt_cell("CNN_LSTM", baselines["CNN_LSTM"]["training_time"], best_time, worst_time, "time")} | {fmt_cell("ViT_Transformer", baselines["ViT_Transformer"]["training_time"], best_time, worst_time, "time")} | {fmt_cell("Impoola_CNN", baselines["Impoola_CNN"]["training_time"], best_time, worst_time, "time")} |
+| **Final File Size** | {fmt_cell("NatureCNN", baselines["NatureCNN"]["model_size_mb"], best_size, worst_size, "size")} | {fmt_cell("CNN_LSTM", baselines["CNN_LSTM"]["model_size_mb"], best_size, worst_size, "size")} | {fmt_cell("ViT_Transformer", baselines["ViT_Transformer"]["model_size_mb"], best_size, worst_size, "size")} | {fmt_cell("Impoola_CNN", baselines["Impoola_CNN"]["model_size_mb"], best_size, worst_size, "size")} |
+| **Parameter Count (Neurons)** | {fmt_cell("NatureCNN", baselines["NatureCNN"]["num_params"], best_params, worst_params, "params")} | {fmt_cell("CNN_LSTM", baselines["CNN_LSTM"]["num_params"], best_params, worst_params, "params")} | {fmt_cell("ViT_Transformer", baselines["ViT_Transformer"]["num_params"], best_params, worst_params, "params")} | {fmt_cell("Impoola_CNN", baselines["Impoola_CNN"]["num_params"], best_params, worst_params, "params")} |"""
         
         start_tag = "<!-- BENCHMARK_START -->"
         end_tag = "<!-- BENCHMARK_END -->"
@@ -237,55 +237,55 @@ def update_markdown_files(impoola_results: Dict[str, Any]):
             after = parts[1].split(end_tag)[1]
             updated_content = f"{before}{start_tag}\n{new_table}\n{end_tag}{after}"
             readme_path.write_text(updated_content, encoding="utf-8")
-            print("[OK] README.md atualizado com sucesso.")
+            print("[OK] README.md updated successfully.")
         else:
-            print("[!] Tags de benchmark não encontradas no README.md. Tabela não atualizada no README.")
+            print("[!] Benchmark tags not found in README.md. Table not updated in the README.")
     else:
-        print("[!] README.md não encontrado no caminho relativo esperado.")
+        print("[!] README.md not found at the expected relative path.")
 
-    # 2. Atualizar models/comparison_results.md
+    # 2. Update models/comparison_results.md
     comp_path = Path("./models/comparison_results.md")
-    print(f"Atualizando {comp_path.resolve()}...")
+    print(f"Updating {comp_path.resolve()}...")
     
-    comp_md = f"""# Comparacao de Modelos: NatureCNN vs CNN+LSTM vs ViT vs Impoola-CNN
+    comp_md = f"""# Model Comparison: NatureCNN vs CNN+LSTM vs ViT vs Impoola-CNN
 
-## Resultados
+## Results
 
-| Metrica             | NatureCNN          | CNN+LSTM           | ViT Transformer    | Impoola-CNN        |
+| Metric              | NatureCNN          | CNN+LSTM           | ViT Transformer    | Impoola-CNN        |
 |---------------------|--------------------|--------------------|--------------------|--------------------|
-| Loss Final          | {baselines['NatureCNN']['final_loss']:.6f}          | {baselines['CNN_LSTM']['final_loss']:.6f}          | {baselines['ViT_Transformer']['final_loss']:.6f}          | {baselines['Impoola_CNN']['final_loss']:.6f}          |
-| Tempo de Treino     | {baselines['NatureCNN']['training_time']:.1f}s               | {baselines['CNN_LSTM']['training_time']:.1f}s               | {baselines['ViT_Transformer']['training_time']:.1f}s               | {baselines['Impoola_CNN']['training_time']:.1f}s               |
-| Tamanho do Modelo   | {baselines['NatureCNN']['model_size_mb']:.2f} MB          | {baselines['CNN_LSTM']['model_size_mb']:.2f} MB          | {baselines['ViT_Transformer']['model_size_mb']:.2f} MB          | {baselines['Impoola_CNN']['model_size_mb']:.2f} MB          |
-| Num. Parametros     | {baselines['NatureCNN']['num_params']:,}        | {baselines['CNN_LSTM']['num_params']:,}        | {baselines['ViT_Transformer']['num_params']:,}        | {baselines['Impoola_CNN']['num_params']:,}        |
+| Final Loss          | {baselines['NatureCNN']['final_loss']:.6f}          | {baselines['CNN_LSTM']['final_loss']:.6f}          | {baselines['ViT_Transformer']['final_loss']:.6f}          | {baselines['Impoola_CNN']['final_loss']:.6f}          |
+| Training Time       | {baselines['NatureCNN']['training_time']:.1f}s               | {baselines['CNN_LSTM']['training_time']:.1f}s               | {baselines['ViT_Transformer']['training_time']:.1f}s               | {baselines['Impoola_CNN']['training_time']:.1f}s               |
+| Model Size          | {baselines['NatureCNN']['model_size_mb']:.2f} MB          | {baselines['CNN_LSTM']['model_size_mb']:.2f} MB          | {baselines['ViT_Transformer']['model_size_mb']:.2f} MB          | {baselines['Impoola_CNN']['model_size_mb']:.2f} MB          |
+| Num. Params         | {baselines['NatureCNN']['num_params']:,}        | {baselines['CNN_LSTM']['num_params']:,}        | {baselines['ViT_Transformer']['num_params']:,}        | {baselines['Impoola_CNN']['num_params']:,}        |
 
-## Analise
+## Analysis
 
-- **Menor Loss**: {best_loss.replace('_', ' ')}
-- **Mais Rapido**: {best_time.replace('_', ' ')}
-- **Mais Leve**: {best_size.replace('_', ' ')}
-- **NatureCNN**: Modelo convolucional padrao, mais leve e rapido de treinar.
-- **CNN+LSTM**: Adiciona memoria temporal com LSTM bidirecional e atencao temporal.
-- **ViT Transformer**: Modelo baseado em Self-Attention, captura relacoes espaciais e temporais de forma mais sofisticada.
-- **Impoola-CNN**: Modelo residual baseado no Impala com Global Average Pooling (GAP), sendo o mais eficiente em parametros e altamente invariante a translacoes.
+- **Lowest Loss**: {best_loss.replace('_', ' ')}
+- **Fastest**: {best_time.replace('_', ' ')}
+- **Lightest**: {best_size.replace('_', ' ')}
+- **NatureCNN**: Standard convolutional model, lighter and faster to train.
+- **CNN+LSTM**: Adds temporal memory with a bidirectional LSTM and temporal attention.
+- **ViT Transformer**: Self-Attention based model, captures spatial and temporal relations in a more sophisticated way.
+- **Impoola-CNN**: Residual model based on Impala with Global Average Pooling (GAP), the most parameter-efficient one and highly invariant to translations.
 
-## Configuracao do Experimento
+## Experiment Configuration
 
-- Epocas: {impoola_results.get('epochs', 'N/A')}
+- Epochs: {impoola_results.get('epochs', 'N/A')}
 - Batch Size: {impoola_results.get('batch', 'N/A')}
 - Learning Rate: {impoola_results.get('lr', 'N/A')}
 - Device: {impoola_results.get('device', 'N/A')}
-- Num. Acoes: {GAME_CONFIG.get('actions', {}).get('num_actions', 'N/A')}
+- Num. Actions: {GAME_CONFIG.get('actions', {}).get('num_actions', 'N/A')}
 
-## Artefatos
+## Artifacts
 
-- Modelo NatureCNN: `models/NatureCNN_policy.zip`
-- Modelo CNN+LSTM: `models/CNN_LSTM_policy.zip`
-- Modelo ViT: `models/ViT_Transformer_policy.zip`
-- Modelo Impoola-CNN: `models/ImpoolaCNN_policy.zip`
+- NatureCNN model: `models/NatureCNN_policy.zip`
+- CNN+LSTM model: `models/CNN_LSTM_policy.zip`
+- ViT model: `models/ViT_Transformer_policy.zip`
+- Impoola-CNN model: `models/ImpoolaCNN_policy.zip`
 - MLflow Experiment: `Model_Comparison`
 """
     comp_path.write_text(comp_md, encoding="utf-8")
-    print("[OK] comparison_results.md atualizado com sucesso.")
+    print("[OK] comparison_results.md updated successfully.")
 
 
 # ============================================================
@@ -293,36 +293,36 @@ def update_markdown_files(impoola_results: Dict[str, Any]):
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Treina o agente usando Impoola-CNN para Imitation Learning.")
-    parser.add_argument("--epochs", type=int, default=10, help="Numero de epocas (default: 10)")
-    parser.add_argument("--batch", type=int, default=384, help="Tamanho do batch (default: 384)")
+    parser = argparse.ArgumentParser(description="Trains the agent using Impoola-CNN for Imitation Learning.")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs (default: 10)")
+    parser.add_argument("--batch", type=int, default=384, help="Batch size (default: 384)")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate (default: 1e-4)")
     parser.add_argument("--device", type=str, default="cuda", help="Device (cuda/cpu, default: cuda)")
     args = parser.parse_args()
 
-    print_header("TREINAMENTO IMPOOLA-CNN")
+    print_header("IMPOOLA-CNN TRAINING")
 
-    # Verificar dispositivo
+    # Check device
     if args.device == "cuda" and not th.cuda.is_available():
-        print("[!] CUDA nao disponivel, usando CPU.")
+        print("[!] CUDA not available, using CPU.")
         args.device = "cpu"
     else:
         if args.device == "cuda":
-            print(f"[OK] GPU detectada: {th.cuda.get_device_name(0)}")
+            print(f"[OK] GPU detected: {th.cuda.get_device_name(0)}")
 
-    print(f"[CONFIG] Epocas: {args.epochs}, Batch: {args.batch}, LR: {args.lr}, Device: {args.device}")
+    print(f"[CONFIG] Epochs: {args.epochs}, Batch: {args.batch}, LR: {args.lr}, Device: {args.device}")
 
-    # Configurar MLflow
+    # Set up MLflow
     mlflow.set_tracking_uri("file:../mlruns")
     mlflow.set_experiment("Model_Comparison")
 
-    # Carregar dados
+    # Load data
     trajectories = load_demos(demo_path="./demos/")
 
-    # Criar ambiente
+    # Create environment
     env = create_env()
 
-    # Treinar modelo Impoola-CNN
+    # Train the Impoola-CNN model
     with mlflow.start_run(run_name="Impoola_CNN"):
         policy_kwargs = {
             "features_extractor_class": ImpoolaCNNExtractor,
@@ -340,7 +340,7 @@ def main():
         mlflow.log_param("features_dim", 512)
         mlflow.log_param("channels_list", "[32, 64, 128]")
 
-        # Setup do BC
+        # BC setup
         rng = np.random.default_rng(seed=42)
         log_dir = "./models/imitation/impoola_logs"
         os.makedirs(log_dir, exist_ok=True)
@@ -372,22 +372,22 @@ def main():
             custom_logger=custom_logger,
         )
 
-        # Treinar e medir tempo
+        # Train and measure time
         start_time = time.time()
         bc_trainer.train(n_epochs=args.epochs, progress_bar=True)
         training_time = time.time() - start_time
 
-        # Salvar modelo
+        # Save model
         os.makedirs("./models/", exist_ok=True)
         model_path = "./models/ImpoolaCNN_policy.zip"
         bc_trainer.policy.save(model_path)
 
-        # Coletar métricas finais
+        # Collect final metrics
         final_loss = metric_capture.metrics.get("bc/loss", float("nan"))
         model_size = get_model_size_mb(model_path)
         num_params = count_parameters(bc_trainer.policy)
 
-        # Logar métricas
+        # Log metrics
         mlflow.log_metric("final_loss", final_loss)
         mlflow.log_metric("training_time_s", training_time)
         mlflow.log_metric("model_size_mb", model_size)
@@ -405,19 +405,19 @@ def main():
             "num_params": num_params,
         }
 
-        print_header("RESULTADOS IMPOOLA-CNN")
-        print(f"Loss final:  {final_loss:.6f}")
-        print(f"Tempo:       {training_time:.1f}s")
-        print(f"Tamanho:     {model_size:.2f} MB")
-        print(f"Parâmetros:  {num_params:,}")
+        print_header("IMPOOLA-CNN RESULTS")
+        print(f"Final loss:  {final_loss:.6f}")
+        print(f"Time:        {training_time:.1f}s")
+        print(f"Size:        {model_size:.2f} MB")
+        print(f"Params:      {num_params:,}")
 
-        # Atualizar arquivos markdown
+        # Update markdown files
         update_markdown_files(impoola_results)
         
-        # Logar markdown de comparação como artefato
+        # Log the comparison markdown as an artifact
         mlflow.log_artifact("./models/comparison_results.md", artifact_path="report")
 
-    print_header("PROCESSO CONCLUIDO")
+    print_header("PROCESS COMPLETE")
 
 
 if __name__ == "__main__":

@@ -1,35 +1,35 @@
-# Comparacao Completa de Modelos: 6 Arquiteturas
+# Full Model Comparison: 6 Architectures
 
-## Resultados
+## Results
 
-| Metrica             | NatureCNN          | CNN_LSTM           | ViT_Transformer    | Impoola_CNN        | Impala_CNN         | ResNet18           |
+| Metric              | NatureCNN          | CNN_LSTM           | ViT_Transformer    | Impoola_CNN        | Impala_CNN         | ResNet18           |
 |---------------------|--------------------|--------------------|--------------------|--------------------|--------------------|--------------------|
-| Loss Final          | 3.476316           | 3.024518           | 2.998286           | 2.933126           | 3.027630           | 2.901681           |
-| Tempo de Treino     | 18.3            s | 67.8            s | 3288.8          s | 226.2           s | 345.1           s | 251.3           s |
-| Tamanho do Modelo   | 16.33           MB | 23.71           MB | 9.70            MB | 4.20            MB | 67.95           MB | 44.37           MB |
-| Num. Parametros     | 4,196,810         | 6,116,779         | 2,448,010         | 1,009,258         | 17,720,938        | 11,516,938        |
+| Final Loss          | 3.476316           | 3.024518           | 2.998286           | 2.933126           | 3.027630           | 2.901681           |
+| Training Time       | 18.3            s | 67.8            s | 3288.8          s | 226.2           s | 345.1           s | 251.3           s |
+| Model Size          | 16.33           MB | 23.71           MB | 9.70            MB | 4.20            MB | 67.95           MB | 44.37           MB |
+| Num. Params         | 4,196,810         | 6,116,779         | 2,448,010         | 1,009,258         | 17,720,938        | 11,516,938        |
 
-## Analise
+## Analysis
 
-- **Menor Loss**: ResNet18
-- **Mais Rapido**: NatureCNN
-- **Mais Leve**: Impoola CNN
+- **Lowest Loss**: ResNet18
+- **Fastest**: NatureCNN
+- **Lightest**: Impoola CNN
 
-### Descricao das Novas Arquiteturas Adicionadas:
-*   **Impala-CNN**: Modelo clássico do artigo do IMPALA. Apresenta ótima capacidade de memorização espacial por reter o Flatten da camada convolucional, porém gera um arquivo muito pesado.
-*   **ResNet-18**: Arquitetura convolucional profunda com conexões residuais padrão. Oferece boa estabilidade de gradientes, mas é redundante para resoluções de 128x128.
+### Description of the Newly Added Architectures:
+*   **Impala-CNN**: Classic model from the IMPALA paper. It has excellent spatial memorization capacity because it keeps the Flatten of the convolutional layer, but it produces a very heavy file.
+*   **ResNet-18**: Deep convolutional architecture with standard residual connections. It offers good gradient stability, but it is redundant for 128x128 resolutions.
 
-### Nota sobre Swin Transformer e ConvNeXt:
-Tanto o **Swin Transformer** quanto o **ConvNeXt (Tiny)** padrão foram avaliados, mas **removidos do script ativo de treinamento** devido à extrema lentidão de processamento e alto consumo de hardware. 
-O ConvNeXt (Tiny) e o Swin Transformer possuem cerca de 28 milhões de parâmetros cada, o que provoca gargalo de memória de vídeo (VRAM Thrashing) ao processar lotes de 384 em imagens empilhadas, resultando em tempos estimados de treino de **40 horas** (no caso do ConvNeXt) no hardware de desenvolvimento, inviabilizando testes locais ágeis. Embora sejam arquiteturas extremamente potentes para visão geral, exigem recursos de cluster ou GPUs com alta memória dedicada.
+### Note on Swin Transformer and ConvNeXt:
+Both the standard **Swin Transformer** and **ConvNeXt (Tiny)** were evaluated, but **removed from the active training script** due to extreme processing slowness and high hardware consumption. 
+The ConvNeXt (Tiny) and the Swin Transformer each have about 28 million parameters, which causes a video memory bottleneck (VRAM Thrashing) when processing batches of 384 on stacked images, resulting in estimated training times of **40 hours** (in the ConvNeXt case) on the development hardware, which rules out agile local testing. Although they are extremely powerful architectures for general vision, they require cluster resources or GPUs with high dedicated memory.
 
-## Configuracao do Experimento
+## Experiment Configuration
 
-- Epocas de Treino: 10
+- Training Epochs: 10
 - Batch Size: 384
 - Learning Rate: 0.0001
 - Device: cuda
 
-## Artefatos
-- Modelos salvos na pasta `./models/`
-- Experimento MLflow: `Model_Comparison`
+## Artifacts
+- Models saved in the `./models/` folder
+- MLflow Experiment: `Model_Comparison`

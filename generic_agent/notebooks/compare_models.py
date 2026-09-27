@@ -1,27 +1,27 @@
 """
-Comparacao de Modelos Completa: 6 Arquiteturas para Imitation Learning
+Full Model Comparison: 6 Architectures for Imitation Learning
 ========================================================================
 
-Este script compara 6 arquiteturas de redes neurais diferentes:
-1. NatureCNN (Padrão)
+This script compares 6 different neural network architectures:
+1. NatureCNN (Default)
 2. CNN + LSTM + Attention
 3. Vision Transformer (ViT)
 4. Impoola-CNN (GAP)
-5. Impala-CNN (Original com Flatten)
+5. Impala-CNN (Original with Flatten)
 6. ResNet-18
 
-(ConvNeXt e Swin Transformer foram removidos por lentidão no treinamento).
+(ConvNeXt and Swin Transformer were removed because of slow training).
 
-COMO USAR:
+HOW TO USE:
     python compare_models.py --epochs 10 --batch 384 --lr 1e-4 --device cuda --only-new
 
-ARGUMENTOS:
-    --epochs    : Numero de epocas (default: 10)
-    --batch     : Tamanho do batch (default: 384)
+ARGUMENTS:
+    --epochs    : Number of epochs (default: 10)
+    --batch     : Batch size (default: 384)
     --lr        : Learning rate (default: 1e-4)
-    --device    : 'cuda' ou 'cpu' (default: cuda)
-    --only-new  : Treina apenas as 2 novas arquiteturas ativas (Impala, ResNet-18)
-                  e usa baselines pré-registrados para as outras 4.
+    --device    : 'cuda' or 'cpu' (default: cuda)
+    --only-new  : Trains only the 2 active new architectures (Impala, ResNet-18)
+                  and uses the pre-recorded baselines for the other 4.
 """
 
 import os
@@ -31,7 +31,7 @@ import argparse
 from typing import List, Dict, Any
 from pathlib import Path
 
-# Ajustar path para encontrar os modulos
+# Adjust the path so the modules can be found
 sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../utils"))
 
@@ -43,7 +43,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecTransposeImage, Vec
 from stable_baselines3.common.logger import KVWriter, Logger, HumanOutputFormat
 from stable_baselines3.common.policies import ActorCriticCnnPolicy
 
-# Extratores locais
+# Local extractors
 from game_env import GenericGameEnv, TemporalAttentionLSTM
 from config.game_config import GAME_CONFIG
 from vision_transformer import VisionTransformerExtractor
@@ -54,11 +54,11 @@ import mlflow
 
 
 # ============================================================
-# Captura de metricas para o MLflow
+# Metric capture for MLflow
 # ============================================================
 
 class MetricCapture(KVWriter):
-    """Captura o ultimo valor de cada metrica logada pelo BC trainer."""
+    """Captures the last value of each metric logged by the BC trainer."""
     def __init__(self):
         self.metrics: Dict[str, float] = {}
 
@@ -70,7 +70,7 @@ class MetricCapture(KVWriter):
 
 
 class MLflowOutputFormat(KVWriter):
-    """Loga metricas diretamente no MLflow durante o treino."""
+    """Logs metrics directly to MLflow during training."""
     def __init__(self, prefix: str = ""):
         self.prefix = prefix
 
@@ -86,7 +86,7 @@ class MLflowOutputFormat(KVWriter):
 
 
 # ============================================================
-# Funcoes utilitarias
+# Utility functions
 # ============================================================
 
 def print_header(title: str) -> None:
@@ -98,19 +98,19 @@ def print_header(title: str) -> None:
 def load_demos(demo_path: str = "./demos/") -> List[Trajectory]:
     demo_dir = Path(demo_path)
     if not demo_dir.exists():
-        raise FileNotFoundError(f"Diretorio {demo_dir} nao encontrado!")
+        raise FileNotFoundError(f"Directory {demo_dir} not found!")
     
     demo_files = sorted(demo_dir.glob("demo*.pt"))
     if not demo_files:
-        raise FileNotFoundError(f"Nenhum arquivo demo*.pt encontrado em {demo_dir}")
+        raise FileNotFoundError(f"No demo*.pt files found in {demo_dir}")
         
     expected_num_actions = GAME_CONFIG.get("actions", {}).get("num_actions", 18)
     all_trajectories: List[Trajectory] = []
     
-    print(f"Carregando {len(demo_files)} arquivos de demo:")
+    print(f"Loading {len(demo_files)} demo files:")
     for i, demo_file in enumerate(demo_files):
         try:
-            print(f"  [{i+1}/{len(demo_files)}] Carregando {demo_file.name}...", end=" ")
+            print(f"  [{i+1}/{len(demo_files)}] Loading {demo_file.name}...", end=" ")
             data = th.load(demo_file, map_location="cpu")
             items = data if isinstance(data, list) else [data]
             count = 0
@@ -130,10 +130,10 @@ def load_demos(demo_path: str = "./demos/") -> List[Trajectory]:
                 count += 1
             print(f"({count} traj.)")
         except Exception as e:
-            print(f" ERRO: {e}")
+            print(f" ERROR: {e}")
             
     total_frames = sum(len(t.obs) for t in all_trajectories)
-    print(f"\n[OK] Dados carregados: {len(all_trajectories)} trajetorias, {total_frames} frames totais.")
+    print(f"\n[OK] Data loaded: {len(all_trajectories)} trajectories, {total_frames} total frames.")
     return all_trajectories
 
 
@@ -165,7 +165,7 @@ def train_model(
     lr: float,
     device: str,
 ) -> Dict[str, Any]:
-    print_header(f"TREINANDO: {name}")
+    print_header(f"TRAINING: {name}")
     rng = np.random.default_rng(seed=42)
     
     metric_capture = MetricCapture()
@@ -217,22 +217,22 @@ def train_model(
         "num_params": num_params,
     }
     
-    print(f"\n[OK] {name} concluido:")
-    print(f"     Loss final:  {final_loss:.6f}")
-    print(f"     Tempo:       {training_time:.1f}s")
-    print(f"     Tamanho:     {model_size:.2f} MB")
-    print(f"     Parametros:  {num_params:,}")
+    print(f"\n[OK] {name} complete:")
+    print(f"     Final loss:  {final_loss:.6f}")
+    print(f"     Time:        {training_time:.1f}s")
+    print(f"     Size:        {model_size:.2f} MB")
+    print(f"     Params:      {num_params:,}")
     return results
 
 
 # ============================================================
-# Atualização de Markdowns e Geração de Tabela Comparativa
+# Markdown Updates and Comparison Table Generation
 # ============================================================
 
 def save_and_update_results(baselines: Dict[str, Dict[str, Any]], epochs: int, batch: int, lr: float, device: str):
-    print_header("ATUALIZANDO RELATORIOS DE COMPARACAO")
+    print_header("UPDATING COMPARISON REPORTS")
     
-    # Listas ordenadas para exibição no benchmark
+    # Ordered lists for benchmark display
     model_keys = [
         "NatureCNN",
         "CNN_LSTM",
@@ -242,9 +242,9 @@ def save_and_update_results(baselines: Dict[str, Dict[str, Any]], epochs: int, b
         "ResNet18"
     ]
     
-    # Nomes formatados para o markdown
+    # Formatted names for the markdown
     display_names = {
-        "NatureCNN": "NatureCNN (Padrão)",
+        "NatureCNN": "NatureCNN (Default)",
         "CNN_LSTM": "CNN + LSTM + Attention",
         "ViT_Transformer": "Vision Transformer (ViT)",
         "Impoola_CNN": "Impoola-CNN (GAP)",
@@ -275,25 +275,25 @@ def save_and_update_results(baselines: Dict[str, Dict[str, Any]], epochs: int, b
         
         if val_type == "loss":
             base_str = f"{val:.2f}"
-            suffix = " *(Melhor)*" if is_best else (" *(Pior)*" if is_worst else "")
+            suffix = " *(Best)*" if is_best else (" *(Worst)*" if is_worst else "")
         elif val_type == "time":
             if val > 60:
-                base_str = f"{val/60:.1f} minutos"
+                base_str = f"{val/60:.1f} minutes"
             else:
-                base_str = f"{val:.1f} segundos"
-            suffix = " *(Mais Rápido)*" if is_best else (" *(Pesadíssimo)*" if is_worst else "")
+                base_str = f"{val:.1f} seconds"
+            suffix = " *(Fastest)*" if is_best else (" *(Slowest)*" if is_worst else "")
         elif val_type == "size":
             base_str = f"{val:.2f} MB"
-            suffix = " *(O mais leve!)*" if is_best else (" *(Mais Pesado)*" if is_worst else "")
+            suffix = " *(Lightest!)*" if is_best else (" *(Heaviest)*" if is_worst else "")
         elif val_type == "params":
-            base_str = f"{val/1e6:.2f} Milhões"
-            suffix = " *(Mais Eficiente)*" if is_best else (" *(Menos Eficiente)*" if is_worst else "")
+            base_str = f"{val/1e6:.2f} Million"
+            suffix = " *(Most Efficient)*" if is_best else (" *(Least Efficient)*" if is_worst else "")
             
         if is_best:
             return f"**`{base_str}`**{suffix}"
         return f"`{base_str}`{suffix}"
 
-    # 1. Gerar Tabela para o README.md
+    # 1. Generate the table for README.md
     headers = " | ".join([display_names[k] for k in model_keys])
     separators = " | ".join([":---" for _ in model_keys])
     
@@ -302,16 +302,16 @@ def save_and_update_results(baselines: Dict[str, Dict[str, Any]], epochs: int, b
     size_cells = " | ".join([fmt_cell(k, baselines[k]["model_size_mb"], best_size, worst_size, "size") for k in model_keys])
     param_cells = " | ".join([fmt_cell(k, baselines[k]["num_params"], best_params, worst_params, "params") for k in model_keys])
     
-    new_table = f"""| Métrica | {headers} |
+    new_table = f"""| Metric | {headers} |
 | :--- | {separators} |
-| **Poder de Aprendizado (Loss Final)** | {loss_cells} |
-| **Tempo de Treinamento** | {time_cells} |
-| **Peso do Arquivo Final** | {size_cells} |
-| **Quantidade de Parâmetros (Neurônios)** | {param_cells} |"""
+| **Learning Power (Final Loss)** | {loss_cells} |
+| **Training Time** | {time_cells} |
+| **Final File Size** | {size_cells} |
+| **Parameter Count (Neurons)** | {param_cells} |"""
 
     readme_path = Path("../../README.md")
     if readme_path.exists():
-        print(f"Atualizando {readme_path.resolve()}...")
+        print(f"Updating {readme_path.resolve()}...")
         readme_content = readme_path.read_text(encoding="utf-8")
         
         start_tag = "<!-- BENCHMARK_START -->"
@@ -323,37 +323,48 @@ def save_and_update_results(baselines: Dict[str, Dict[str, Any]], epochs: int, b
             after = parts[1].split(end_tag)[1]
             updated_content = f"{before}{start_tag}\n{new_table}\n{end_tag}{after}"
             
-            # Conclusão atualizada
-            conclusion_text = "**Conclusão**: O **Impoola-CNN (GAP)** continua sendo o campeão absoluto de eficiência em arquitetura personalizada: obteve o menor loss final (`2.93`), tamanho super reduzido (`4.20 MB`) e treino rápido (`3.8 minutos`). A **ResNet-18** e o **Impala-CNN** original (com Flatten) se mostraram precisos, mas geram modelos mais pesados devido à falta de Global Average Pooling no caso do Impala (que projeta 32.768 dimensões diretamente em uma camada linear, resultando em `~65 MB` e 17.7M parâmetros)."
+            # Conclusion derived from the measured values, not hard-coded prose
+            def _summary(key: str) -> str:
+                b = baselines[key]
+                return (f"{display_names[key]} ({b['final_loss']:.2f} loss, "
+                        f"{b['model_size_mb']:.2f} MB, {b['num_params'] / 1e6:.2f}M params)")
+
+            conclusion_text = (
+                "**Conclusion**: the lowest in-sample training loss was reached by "
+                f"{_summary(best_loss)}, and the most size- and parameter-efficient model was "
+                f"{_summary(best_params)}. These losses are training objectives measured on the "
+                "demonstration corpus itself, so they rank optimisation ease rather than policy "
+                "quality; see the threats-to-validity section before treating this as a ranking."
+            )
             
-            if "**Conclusão**:" in updated_content:
-                concl_parts = updated_content.split("**Conclusão**:")
+            if "**Conclusion**:" in updated_content:
+                concl_parts = updated_content.split("**Conclusion**:")
                 before_concl = concl_parts[0]
                 after_concl = concl_parts[1].split("\n")[1:]
                 updated_content = f"{before_concl}{conclusion_text}\n" + "\n".join(after_concl)
                 
             readme_path.write_text(updated_content, encoding="utf-8")
-            print("[OK] README.md atualizado com sucesso.")
+            print("[OK] README.md updated successfully.")
         else:
-            print("[!] Tags de benchmark nao encontradas no README.md.")
+            print("[!] Benchmark tags not found in README.md.")
     else:
-        print("[!] README.md nao encontrado no caminho esperado.")
+        print("[!] README.md not found at the expected path.")
 
-    # 2. Gerar models/comparison_results.md
+    # 2. Generate models/comparison_results.md
     comp_path = Path("./models/comparison_results.md")
-    print(f"Atualizando {comp_path.resolve()}...")
+    print(f"Updating {comp_path.resolve()}...")
     
-    comp_table_header = "| Metrica             | " + " | ".join([f"{k:<18}" for k in model_keys]) + " |"
+    comp_table_header = "| Metric              | " + " | ".join([f"{k:<18}" for k in model_keys]) + " |"
     comp_table_sep = "|---------------------|" + "|".join(["--------------------" for _ in model_keys]) + "|"
     
-    comp_loss_row = "| Loss Final          | " + " | ".join([f"{baselines[k]['final_loss']:<18.6f}" for k in model_keys]) + " |"
-    comp_time_row = "| Tempo de Treino     | " + " | ".join([f"{baselines[k]['training_time']:<16.1f}s" for k in model_keys]) + " |"
-    comp_size_row = "| Tamanho do Modelo   | " + " | ".join([f"{baselines[k]['model_size_mb']:<15.2f} MB" for k in model_keys]) + " |"
-    comp_param_row = "| Num. Parametros     | " + " | ".join([f"{baselines[k]['num_params']:<17,}" for k in model_keys]) + " |"
+    comp_loss_row = "| Final Loss          | " + " | ".join([f"{baselines[k]['final_loss']:<18.6f}" for k in model_keys]) + " |"
+    comp_time_row = "| Training Time       | " + " | ".join([f"{baselines[k]['training_time']:<16.1f}s" for k in model_keys]) + " |"
+    comp_size_row = "| Model Size          | " + " | ".join([f"{baselines[k]['model_size_mb']:<15.2f} MB" for k in model_keys]) + " |"
+    comp_param_row = "| Num. Params         | " + " | ".join([f"{baselines[k]['num_params']:<17,}" for k in model_keys]) + " |"
     
-    comp_md = f"""# Comparacao Completa de Modelos: 6 Arquiteturas
+    comp_md = f"""# Full Model Comparison: 6 Architectures
 
-## Resultados
+## Results
 
 {comp_table_header}
 {comp_table_sep}
@@ -362,33 +373,33 @@ def save_and_update_results(baselines: Dict[str, Dict[str, Any]], epochs: int, b
 {comp_size_row}
 {comp_param_row}
 
-## Analise
+## Analysis
 
-- **Menor Loss**: {best_loss.replace('_', ' ')}
-- **Mais Rapido**: {best_time.replace('_', ' ')}
-- **Mais Leve**: {best_size.replace('_', ' ')}
+- **Lowest Loss**: {best_loss.replace('_', ' ')}
+- **Fastest**: {best_time.replace('_', ' ')}
+- **Lightest**: {best_size.replace('_', ' ')}
 
-### Descricao das Novas Arquiteturas Adicionadas:
-*   **Impala-CNN**: Modelo clássico do artigo do IMPALA. Apresenta ótima capacidade de memorização espacial por reter o Flatten da camada convolucional, porém gera um arquivo muito pesado.
-*   **ResNet-18**: Arquitetura convolucional profunda com conexões residuais padrão. Oferece boa estabilidade de gradientes, mas é redundante para resoluções de 128x128.
+### Description of the Newly Added Architectures:
+*   **Impala-CNN**: Classic model from the IMPALA paper. It has excellent spatial memorization capacity because it keeps the Flatten of the convolutional layer, but it produces a very heavy file.
+*   **ResNet-18**: Deep convolutional architecture with standard residual connections. It offers good gradient stability, but it is redundant for 128x128 resolutions.
 
-### Nota sobre Swin Transformer e ConvNeXt:
-Tanto o **Swin Transformer** quanto o **ConvNeXt (Tiny)** padrão foram avaliados, mas **removidos do script ativo de treinamento** devido à extrema lentidão de processamento e alto consumo de hardware. 
-O ConvNeXt (Tiny) e o Swin Transformer possuem cerca de 28 milhões de parâmetros cada, o que provoca gargalo de memória de vídeo (VRAM Thrashing) ao processar lotes de 384 em imagens empilhadas, resultando em tempos estimados de treino de **40 horas** (no caso do ConvNeXt) no hardware de desenvolvimento, inviabilizando testes locais ágeis. Embora sejam arquiteturas extremamente potentes para visão geral, exigem recursos de cluster ou GPUs com alta memória dedicada.
+### Note on Swin Transformer and ConvNeXt:
+Both the standard **Swin Transformer** and **ConvNeXt (Tiny)** were evaluated, but **removed from the active training script** due to extreme processing slowness and high hardware consumption. 
+The ConvNeXt (Tiny) and the Swin Transformer each have about 28 million parameters, which causes a video memory bottleneck (VRAM Thrashing) when processing batches of 384 on stacked images, resulting in estimated training times of **40 hours** (in the ConvNeXt case) on the development hardware, which rules out agile local testing. Although they are extremely powerful architectures for general vision, they require cluster resources or GPUs with high dedicated memory.
 
-## Configuracao do Experimento
+## Experiment Configuration
 
-- Epocas de Treino: {epochs}
+- Training Epochs: {epochs}
 - Batch Size: {batch}
 - Learning Rate: {lr}
 - Device: {device}
 
-## Artefatos
-- Modelos salvos na pasta `./models/`
-- Experimento MLflow: `Model_Comparison`
+## Artifacts
+- Models saved in the `./models/` folder
+- MLflow Experiment: `Model_Comparison`
 """
     comp_path.write_text(comp_md, encoding="utf-8")
-    print("[OK] comparison_results.md atualizado com sucesso.")
+    print("[OK] comparison_results.md updated successfully.")
 
 
 # ============================================================
@@ -396,31 +407,32 @@ O ConvNeXt (Tiny) e o Swin Transformer possuem cerca de 28 milhões de parâmetr
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Compara 6 arquiteturas de redes neurais para Imitation Learning.")
-    parser.add_argument("--epochs", type=int, default=10, help="Numero de epocas (default: 10)")
-    parser.add_argument("--batch", type=int, default=384, help="Tamanho do batch (default: 384)")
+    parser = argparse.ArgumentParser(description="Compares 6 neural network architectures for Imitation Learning.")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs (default: 10)")
+    parser.add_argument("--batch", type=int, default=384, help="Batch size (default: 384)")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate (default: 1e-4)")
     parser.add_argument("--device", type=str, default="cuda", help="Device (cuda/cpu, default: cuda)")
-    parser.add_argument("--only-new", action="store_true", help="Treina apenas os 2 novos modelos e usa baselines para os outros.")
+    parser.add_argument("--only-new", action="store_true", help="Trains only the 2 new models and uses baselines for the others.")
     args = parser.parse_args()
 
-    print_header("COMPARACAO DE 6 ARQUITETURAS")
+    print_header("COMPARISON OF 6 ARCHITECTURES")
 
-    # Verificar dispositivo
+    # Check device
     if args.device == "cuda" and not th.cuda.is_available():
-        print("[!] CUDA nao disponivel, usando CPU.")
+        print("[!] CUDA not available, using CPU.")
         args.device = "cpu"
     else:
         if args.device == "cuda":
-            print(f"[OK] GPU detectada: {th.cuda.get_device_name(0)}")
+            print(f"[OK] GPU detected: {th.cuda.get_device_name(0)}")
 
-    print(f"[CONFIG] Epocas: {args.epochs}, Batch: {args.batch}, LR: {args.lr}, Device: {args.device}")
+    print(f"[CONFIG] Epochs: {args.epochs}, Batch: {args.batch}, LR: {args.lr}, Device: {args.device}")
 
-    # Configurar MLflow
+    # Set up MLflow
     mlflow.set_tracking_uri("file:../mlruns")
     mlflow.set_experiment("Model_Comparison")
 
-    # Baselines padrao (caso a arquitetura nao seja treinada nesta run)
+    # Baselines used when an architecture is not retrained in this run.
+    # Values are the completed MLflow runs of experiment "Model_Comparison".
     baselines = {
         "NatureCNN": {
             "final_loss": 3.476316,
@@ -447,38 +459,38 @@ def main():
             "num_params": 1009258
         },
         "Impala_CNN": {
-            "final_loss": 2.945390,
-            "training_time": 406.6,
+            "final_loss": 3.027630,
+            "training_time": 345.1,
             "model_size_mb": 67.95,
             "num_params": 17720938
         },
         "ResNet18": {
-            "final_loss": 3.018901,
-            "training_time": 391.1,
+            "final_loss": 2.901681,
+            "training_time": 251.3,
             "model_size_mb": 44.37,
             "num_params": 11516938
         }
     }
 
-    # Carregar dados
+    # Load data
     trajectories = load_demos(demo_path="./demos/")
     env = create_env()
 
-    # Definir quais modelos treinar
+    # Define which models to train
     models_to_train = []
     if args.only_new:
         models_to_train = ["Impala_CNN", "ResNet18"]
-        print("[INFO] Treinando APENAS as 2 novas arquiteturas. Usando baselines para o restante.")
+        print("[INFO] Training ONLY the 2 new architectures. Using baselines for the rest.")
     else:
         models_to_train = [
             "NatureCNN", "CNN_LSTM", "ViT_Transformer", "Impoola_CNN",
             "Impala_CNN", "ResNet18"
         ]
-        print("[INFO] Treinando TODAS as 6 arquiteturas de redes neurais.")
+        print("[INFO] Training ALL 6 neural network architectures.")
 
-    # Loop de treinamento
+    # Training loop
     for m_name in models_to_train:
-        # Configurar kwargs
+        # Configure kwargs
         policy_kwargs = None
         
         if m_name == "CNN_LSTM":
@@ -546,20 +558,20 @@ def main():
                 device=args.device
             )
             
-            # Atualizar dicionário local de baselines
+            # Update the local baselines dictionary
             baselines[m_name] = results
             
-            # Logar métricas no run ativo do MLflow
+            # Log metrics to the active MLflow run
             mlflow.log_metric("final_loss", results["final_loss"])
             mlflow.log_metric("training_time_s", results["training_time"])
             mlflow.log_metric("model_size_mb", results["model_size_mb"])
             mlflow.log_metric("num_params", results["num_params"])
             mlflow.log_artifact(f"./models/{m_name}_policy.zip", artifact_path="model")
 
-    # Salvar resultados e atualizar markdowns
+    # Save results and update the markdown files
     save_and_update_results(baselines, args.epochs, args.batch, args.lr, args.device)
 
-    # Log de comparação resumida no MLflow
+    # Log the summarized comparison to MLflow
     model_keys = list(baselines.keys())
     with mlflow.start_run(run_name="Comparison_Summary"):
         mlflow.log_param("models_compared", ", ".join(model_keys))
@@ -569,7 +581,7 @@ def main():
             mlflow.log_metric(f"{k.lower()}_params", baselines[k]["num_params"])
         mlflow.log_artifact("./models/comparison_results.md", artifact_path="report")
 
-    print_header("PROCESSO COMPLETO CONCLUIDO")
+    print_header("FULL PROCESS COMPLETE")
 
 
 if __name__ == "__main__":
