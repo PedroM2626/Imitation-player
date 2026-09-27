@@ -117,47 +117,40 @@ capture time*.
 ### 3.3 Measured corpus, and what it implies
 
 Generic corpus: **27 161 action frames** across four files, ≈ 7.5 min of play at 60 fps. Hajime:
-**6 150 frames in one file**. Per-bit marginal firing rates:
+**6 150 frames in one file**. Per-bit marginal firing rates (mean of `acts`):
 
-| Bit | Semantic | Generic files | Hajime file |
+| Bit | Semantic | Generic files | Hajime |
 |---|---|---|---|
-| 0 | up | 0.428 – 0.527 | 0.266 |
-| 1 | down | 0.308 – 0.410 | 0.087 |
-| 2 | left | 0.077 – 0.101 | 0.195 |
-| 3 | right | 0.182 – 0.220 | 0.065 |
-| 4 | A / Cross / jump | 0.054 – 0.266 | 0.032 |
-| 5 | B / Circle | 0.005 – 0.008 | 0.069 |
-| 6 | X / Square | 0.002 – 0.004 | 0.020 |
+| 0 / 1 | up / down | 0.428 – 0.527 / 0.308 – 0.410 | 0.266 / 0.087 |
+| 2 / 3 | left / right | 0.077 – 0.101 / 0.182 – 0.220 | 0.195 / 0.065 |
+| 4 / 5 / 6 | A-Cross / B-Circle / X-Square | 0.054 – 0.266 / 0.005 – 0.008 / 0.002 – 0.004 | 0.032 / 0.069 / 0.020 |
 | **7 – 17** | triggers, stick press, camera | **exactly 0.0 in every file** | **exactly 0.0** |
 
-Distinct joint action vectors per file: 35, 36, 37, 39, and **24** in the hajime session. Two structural
-problems follow, and §10 of the README shows they dominate every reported loss.
+Distinct joint action vectors per file: 35, 36, 37, 39, and **24** in the hajime session — so at ~27 k
+frames the corpus is two orders of magnitude larger than its own action diversity. Two structural
+problems follow, and README §6.2 shows they dominate every reported loss.
 
 **Dead bits 7-17 are not an operator failure — they are unreachable by code.** In gamepad mode the
-recorder only ever writes to indices 0-6 (`record_trajectories.py:122-153`; the comment
+recorder only ever writes indices 0-6 (`record_trajectories.py:122-153`; the comment
 `# Other buttons can be mapped here` at line 155 marks the gap). No amount of recording will set bit 7
-(LT), 8 (RT), 9 (L3) or 10-17 (right stick). To make them recordable you must extend the recorder —
-read `bLeftTrigger` / `bRightTrigger`, the `0x0200`/`0x0400`/`0x0800`/`0x1000` button masks and
-`sThumbRX/RY`, and write them to the corresponding indices — and only then re-record. Alternatively,
-switch the configuration to `keyboard_mouse` with 9 mappings, where every bit *is* reachable.
+(LT), 8 (RT), 9 (L3) or 10-17 (right stick). Fixing them requires extending the recorder to read
+`bLeftTrigger` / `bRightTrigger`, the `0x0200`/`0x0400`/`0x0800`/`0x1000` masks and `sThumbRX/RY`, and
+then re-recording. Alternatively switch to `keyboard_mouse` with 9 mappings, where every bit *is*
+reachable.
 
-**Class imbalance is fixable by recording behaviour.** Concretely:
+**Class imbalance is fixable by recording behaviour:**
 
-1. Record **many short clips, not one long session.** `K` to start, play one specific situation for
-   60-90 s, `K` to stop; repeat. Each stop writes a separate file, so the shuffler sees many independent
-   trajectories instead of one autocorrelated block. The loop caps at 10 files, so start several sessions.
-2. **Deliberately actuate the rare bits.** Bits 5 and 6 fire below 1 % in the generic corpus. If a
-   button is task-irrelevant to you, press it anyway during some clips; a defence-only clip, a
-   whiffed-combo clip, a cornered clip and an approach clip are worth more than five more neutral
-   clips.
-3. **Cover states, not frames.** Variety beats volume: at ~27 k frames the corpus is already two orders
-   of magnitude larger than the 24 distinct joint actions the hajime session actually contains. Adding
-   frames of the same kind teaches nothing new; adding the missing *action* combinations does.
+1. **Many short clips, not one long session.** `K`, play one specific situation for 60-90 s, `K`. Each
+   stop writes a separate file, so the shuffler sees independent trajectories rather than one
+   autocorrelated block. The loop caps at 10 files per process, so run several sessions.
+2. **Deliberately actuate the rare bits** — bits 5 and 6 fire below 1 %. A defence-only clip, a
+   whiffed-combo clip, a cornered clip and an approach clip are worth more than five more neutral clips.
+3. **Cover states, not frames:** adding frames of the same kind teaches nothing new; adding the missing
+   *action combinations* does.
 4. **Keep widths consistent.** Do not reconfigure `num_actions` between recordings into the same
    `demos/` folder; two of the four generic files are 7-wide because of exactly that (§12).
 5. Verify immediately with `python train_agent.py --epochs 1 --batch 32 --device cpu`, whose
-   `Action distribution (0-N):` histogram prints the marginal firing rate per bit — the fastest check
-   that a recording session actually captured what you intended.
+   `Action distribution (0-N):` histogram prints the marginal firing rate per bit.
 
 ## 4. Training
 
