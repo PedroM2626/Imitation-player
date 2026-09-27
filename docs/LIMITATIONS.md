@@ -144,18 +144,19 @@ it contiguous episode slices with `reset_hidden()` at boundaries.
 | B7 | `venv/` in this working copy | **broken** | points at `C:\Users\pedro\...\Python311\python.exe`, which does not exist on this machine | delete and recreate; it is git-ignored so it is a local problem only |
 | B8 | `Vision_Mamba` | **unreproducible** | source module deleted; only `generic_agent/utils/__pycache__/mamba_architectures.cpython-311.pyc` survives | recover or reimplement, then re-measure |
 | B9 | `SpatialAttention` | **dead code** | `game_env.py:368`, referenced by nothing | delete |
-| B10 | `get_last_index` | **wrong ordering** | compares checkpoint suffixes lexicographically, so `bc_policy9.zip` outranks `bc_policy10.zip` | parse as int |
+| B10 | Numbered-checkpoint fallback in `run_ai.py` | **unreachable** | `get_last_index` itself is correct (regex + `max(int(...))`, `-1` handled), but `run_ai.py:36` points it at `./models/steps`, a directory no script ever creates, so the fallback can never find anything | search `./models/`, or drop the fallback |
 | B11 | Config fields | **decorative** | `TRAINING_CONFIG.window_size`, `dagger_iterations`, `demo_path`, `model_path`, `train_path` and all four `INPUT_CONFIG` fields are read by nothing; scripts hard-code `./demos/`, `./models/` | wire them up or remove them |
 | B12 | `actions.mappings` in gamepad mode | **ignored** | `step()` dispatches on hard-coded indices; the declared `vg_code` names (`DS4_BUTTON_CROSS`, …) are never resolved, and the env presses `XUSB_GAMEPAD_A/B/X` | drive emission from the table |
 | B13 | Hard-coded absolute paths | **unportable** | `hajime_agent/config/game_config.py` embeds a local RPCS3 executable path and ROM path; `compare_models.py` assumes `../../README.md` from cwd | require env vars or a local, git-ignored override file |
-| B14 | Duplicate packages | **drift-prone** | 9 modules byte-identical across `hajime_agent/` and `generic_agent/`; the two `compare_models.py` copies carried different baseline constants (now identical) | collapse to one package + per-title config |
+| B14 | Duplicate packages | **drift-prone** | 10 of the 18 modules per package are byte-identical across `hajime_agent/` and `generic_agent/`; the two `compare_models.py` copies carried different baseline constants (now identical) | collapse to one package + per-title config |
 | B15 | MLflow experiment naming | **misleading** | `generic_agent/notebooks/train_agent.py` writes to experiment `Hajime_no_Ippo_Imitation_Learning`; `train_agent_impoola.py` writes to `Model_Comparison` | derive the experiment name from the package/title |
 | B16 | `bc/l2_loss` | **dead metric** | identically `0.0` in every retained log | drop it, or enable the penalty term |
-| B17 | No tests, no linter, no CI | **absent** | no test directory, no config for any linter, no workflow definitions | add unit tests for env shapes, the action mapping table, demo load/save round-trip, and `get_last_index` |
+| B17 | No tests, no linter, no CI | **absent** | no test directory, no config for any linter, no workflow definitions | add unit tests for env shapes, the action mapping table, demo load/save round-trip, and the trivial-baseline computation |
 | B18 | No licence | **unspecified** | README §18 records the derivation from third-party work but no `LICENSE` file exists and no licence was chosen | choose and add one, or state explicitly that no rights are granted |
 | B21 | Recorder `ESC` handling | **data loss** | the overlay reads `[ESC] Save & Exit` and an inline comment claims a `finally`-block save, but `ESC` only breaks the loop; a trajectory is written **only** by the `K` stop-transition (`record_trajectories.py:96-98`, `197-213`, `243-250`) | flush the buffer on exit, or relabel the key and the overlay |
 | B22 | `run_dagger.py` exit path | same data-loss pattern as B21 | `run_dagger.py:160-161`, `266-269` | as above |
 | B23 | Recorder action mapping | **11 bits unrecordable** | in gamepad mode the recorder writes only indices 0-6 (`record_trajectories.py:122-155`, with `# Other buttons can be mapped here` at 155); triggers, stick press and both camera axes are never captured, so the declared 18-bit space cannot be filled by any data this repository produces | map `bLeftTrigger`/`bRightTrigger`, the `0x0800`(Y)/`0x0400`/thumb masks and `sThumbRX/RY` to indices 7-17, or shrink `num_actions` to what is reachable |
+| B24 | Deployment switches | **inert** | `MAX_FPS` (120 generic / 30 hajime) is declared and never read, so the inference loop is unpaced; the `aggressiveness` branch reads `GAME_CONFIG["aggressiveness"]` while the value lives in `INPUT_CONFIG`, so it always resolves to `1.0` and the alternative sampling path is dead (`run_ai.py:32, 180-202`) | read the constants, or delete the code and the config keys |
 | B19 | CPU fallback in `train_agent.py` / `train_agent_lstm.py` / `train_agent_transformer.py` | **unreachable** | `device = args.device or check_cuda()`, but `--device` defaults to the non-empty string `"cuda"`, so `check_cuda()` never runs and PyTorch raises on a CPU-only machine | drop the `or` and call `check_cuda()` when the flag is absent, or make the default `None` |
 | B20 | `inputs==0.5` in `requirements.txt` | **unused** | imported by nothing in the tree | remove from the pin set |
 
@@ -175,7 +176,7 @@ it contiguous episode slices with `reset_hidden()` at boundaries.
 8. Make capture, demo-loading and width-reconciliation failures loud and counted (L9).
 
 **P2 — correctness and hygiene fixes that are cheap and independent of the research.**
-9. Fix the `train_imiation.py` glob and spelling (B4); `get_last_index` numeric ordering (B10).
+9. Fix the `train_imiation.py` glob and spelling (B4); point the deployment fallback at a directory that exists (B10).
 10. Add logging to the deployment loops (B5).
 11. Make the Windows-only imports conditional and repair the `Dockerfile` (B6).
 12. Delete dead code and unwired config; derive MLflow names (B9, B11, B15, B16).

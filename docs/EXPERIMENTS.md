@@ -102,8 +102,12 @@ region of `README.md`**. See §5.
 ### 2.7 `run_ai.py`, `run_ai_lstm.py`, `run_ai_transformer.py` — deployment
 No CLI. Load the newest matching checkpoint via `get_last_index`, then loop `policy.predict(obs)` →
 `env.step(...)`. Keys: `K` toggles AI against human, `ESC` quits. Inference pacing is a script constant:
-`MAX_FPS` 120 in `generic_agent`, 30 in `hajime_agent`. `generic_agent/notebooks/run_ai.py` additionally
-implements the `aggressiveness` branch (apply `action_net` → sigmoid → raise to a power → threshold).
+`MAX_FPS` is declared in these scripts (120 in `generic_agent`, 30 in `hajime_agent`) but **never read**,
+so the loop is unpaced. `generic_agent/notebooks/run_ai.py` additionally
+contains the `aggressiveness` branch (`action_net` → sigmoid → multiply the mouse-button probabilities →
+Bernoulli-sample), which is dead: the factor is looked up at the top level of `GAME_CONFIG` while it is
+defined in `INPUT_CONFIG`, so it always resolves to `1.0` and `policy.predict` is used instead
+([ARCHITECTURE.md §5](ARCHITECTURE.md#5-inference-path-run_aipy)).
 **These scripts log nothing**: no metric, no MLflow run, no counter of frames or actions. Deployment is
 therefore unaudited and unmeasured.
 

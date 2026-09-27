@@ -156,7 +156,7 @@ written on, so no deploy or recording command in this repository can currently b
   (`game_env.py:322-337`) enumerates visible top-level windows and matches the owning process name
   case-insensitively against `GAME_CONFIG["process_name"]`, returning the **first** hit in enumeration
   order. If no window is found and `exe_path` is set, `__init__` does `Popen([exe_path, rom_path])`
-  (`game_env.py:111-120`), then `wait_start()` polls for one second at a time for **up to 120 seconds**
+  (`game_env.py:114-121`), then `wait_start()` polls for one second at a time for **up to 120 seconds**
   (`game_env.py:339-361`). On timeout it only prints `WARNING: Window for '<name>' not found after 120s!`
   and returns — the object stays alive with `self.hwnd = None`, so every later capture yields the
   black/previous-frame fallback. **Check for the `Window founded HWND:` line before trusting a recording.**
@@ -171,7 +171,7 @@ written on, so no deploy or recording command in this repository can currently b
   generic package requires the target window to be already open.
 - **`keyboard_mouse` mode** (the `generic_agent` example config) additionally requires
   `actions.input_mode == "keyboard_mouse"` and a mapping table whose entries use the keys `type`,
-  `key`/`button` — a different schema from the gamepad table (§TRAINING_GUIDE 2).
+  `key`/`button` — a different schema from the gamepad table ([TRAINING_GUIDE §2](TRAINING_GUIDE.md#2-editing-configgame_configpy)).
 
 ## 8. Verification, in order
 
@@ -190,7 +190,7 @@ run from inside `<pkg>/notebooks`, with the repository root as the root of the p
 | 6 | `cd generic_agent\notebooks`<br>`python train_agent.py --epochs 1 --batch 32 --lr 1e-4 --device cpu` | `1. LOADING DATA`, a per-file load list, an action-distribution histogram, then one epoch of progress and `[OK] Model saved to: ./models/bc_policy.zip`. Requires at least one `demo*.pt` in `./demos/`; with an empty directory it raises `FileNotFoundError: No demo files found in demos/`, which is the correct outcome for a fresh clone |
 
 Step 6 writes into `./models/` and `../mlruns`; delete `models/bc_policy.zip` afterwards if you intend
-to benchmark, since `run_ai.py` prefers that file over any checkpoint (§TRAINING_GUIDE 8).
+to benchmark, since `run_ai.py` prefers that file over any checkpoint ([TRAINING_GUIDE §8](TRAINING_GUIDE.md#8-deploying-a-policy)).
 
 ## 9. Docker: the `Dockerfile` does not work
 
@@ -202,7 +202,7 @@ to benchmark, since `run_ai.py` prefers that file over any checkpoint (§TRAININ
 | 5-13 | `apt-get install -y python3.11` has no candidate in Ubuntu 22.04's default archives (jammy packages CPython 3.10; 3.11 needs the deadsnakes PPA, which the file never adds) → the first `RUN` fails |
 | 28-32 | the `sed` strip list is `dxcam`, `pywin32`, `vgamepad`, `inputs`, `keyboard`. `PyDirectInput` and `mouse` are **not** stripped, contrary to the comment on line 26 — but neither matters, because `game_env.py` imports `win32gui`, `win32process`, `vgamepad` and `dxcam` at module scope, so the environment module is unimportable on Linux regardless (§1) |
 | 34 | `pip install -r requirements.txt` still has to resolve `torch==2.5.1+cu121` from PyPI; the `+cu121` index is only consulted on line 35, *after* the failing command inside the same `RUN` |
-| 44 | `CMD ["python", "hajime_agent/notebooks/train_agent.py"]` runs with `WORKDIR /app`, but the script inserts `".."` and `"../utils"` into `sys.path` and reads `./demos/`, `./models/`, `file:../mlruns` relative to CWD → `ModuleNotFoundError: game_env` before anything else. Additionally `/app/hajime_agent/notebooks/demos/` is empty, because `.pt` files are git-ignored and so absent from any build context that respects `.gitignore` |
+| 44 | `CMD ["python", "hajime_agent/notebooks/train_agent.py"]` runs with `WORKDIR /app`, but the script inserts `".."` and `"../utils"` into `sys.path` (resolving to `/` and `/utils`) and reads `./demos/`, `./models/`, `file:../mlruns` relative to CWD → `ModuleNotFoundError: No module named 'game_env'` before anything else. Separately, the repository has **no `.dockerignore`**, so `COPY . .` would drag the ~3.6 GB of `.pt` demonstrations, the `models/` checkpoints, `mlruns/` and the broken `venv/` into the build context |
 
 A corrected sketch — **proposal, not tested; no container runtime was exercised for this document**:
 
@@ -255,4 +255,4 @@ path is aspirational and the project should be described as Windows-only.
 | `python.exe` in `venv\Scripts` fails with "unable to locate base Python" | the committed `venv/` points at `C:\Users\pedro\...\Python311` | delete `venv/` and recreate (§3) |
 | `UnicodeDecodeError` / mojibake while loading a `.pt` or writing a report | pickles and generated Markdown were written under a non-UTF-8 default encoding | `set PYTHONUTF8=1` before running; the generated reports are written with `encoding="utf-8"` explicitly |
 | `ModuleNotFoundError: game_env` (or `config`) when running a script | wrong working directory | `cd` into `<pkg>/notebooks` (§8) |
-| `FileNotFoundError: Directory demos not found!` | fresh clone — demonstrations are git-ignored (`*.pt`) | record some first (§TRAINING_GUIDE 3) |
+| `FileNotFoundError: Directory demos not found!` | fresh clone — demonstrations are git-ignored (`*.pt`) | record some first ([TRAINING_GUIDE §3](TRAINING_GUIDE.md#3-recording-demonstrations)) |

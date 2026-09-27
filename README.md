@@ -164,19 +164,20 @@ imitation-player/
 ### 3.1 The two-package fork
 
 `hajime_agent/` and `generic_agent/` are **two configurations of one code base**, not two libraries.
-Nine of the nineteen Python files are byte-identical (`utils/utils.py`, `utils/impoola_cnn.py`,
-`utils/new_architectures.py`, `utils/vision_transformer.py`, `notebooks/run_ai_lstm.py`,
-`run_ai_transformer.py`, `train_agent_impoola.py`, `train_gail.py`, `train_imiation.py`). The rest
-diverge in three places, all of which are input/output concerns rather than modelling:
+Ten of the eighteen Python files in each package are byte-identical (`utils/utils.py`,
+`utils/impoola_cnn.py`, `utils/new_architectures.py`, `utils/vision_transformer.py`,
+`notebooks/run_ai_lstm.py`, `run_ai_transformer.py`, `train_agent_impoola.py`, `train_gail.py`,
+`train_imiation.py`, and `compare_models.py`, whose two copies differed only in stale baseline
+constants that this revision realigned). The remaining eight diverge only in input/output concerns,
+never in modelling:
 
 | Diverging file | Nature of the difference |
 |---|---|
 | `config/game_config.py` | `RobloxPlayerBeta` + keyboard/mouse + 9 actions vs `rpcs3` + gamepad + 18 actions, plus hard-coded emulator/ROM absolute paths in the Hajime copy |
 | `utils/game_env.py` | Only `generic_agent` implements the `keyboard_mouse` emission branch; `hajime_agent` is gamepad-only |
-| `notebooks/run_ai.py` | Inference rate (`MAX_FPS` 120 vs 30); `generic_agent` adds a logit-boost "aggressiveness" branch |
+| `notebooks/run_ai.py` | `generic_agent` adds a logit-sharpening "aggressiveness" branch, which is inert (§5.5); the declared `MAX_FPS` constants (120 vs 30) are read by nothing, so neither loop is paced |
 | `notebooks/record_trajectories.py` | Action-vector width and the keyboard/mouse mapping path |
 | `notebooks/train_agent.py` | `generic_agent` pads/truncates action vectors to the configured width (§6.3) |
-| `notebooks/compare_models.py` | Duplicated hard-coded baseline numbers, which have drifted apart between the two copies |
 
 Consequences worth stating: fixes applied to one package do not automatically propagate to the
 other, and **all recorded benchmark evidence currently lives under `generic_agent/`**, so the Hajime
@@ -298,9 +299,10 @@ any episodic evaluation metric** — there is no notion of a round ending, a lif
 match being won. Any future success-rate work requires a reward/terminal signal, which in a
 black-box setting must be inferred from pixels (a HUD reader) or from the game's own state.
 
-Inference-rate control is likewise external: the environment computes `self.frame_time` from
-`target_fps` but never uses it, and pacing is imposed by the `run_ai*.py` loops (`MAX_FPS` 120 in
-`generic_agent`, 30 in `hajime_agent`). Because capture is *asynchronous* to the emulator's own
+Pacing is external and, in practice, absent: the environment computes `self.frame_time` from
+`target_fps` but never uses it, and the `run_ai*.py` loops declare a `MAX_FPS` constant (120 in
+`generic_agent`, 30 in `hajime_agent`) that is **never read**, so deployment runs as fast as capture and
+inference allow. Because capture is *asynchronous* to the emulator's own
 frame rate, the recorded `(frame, action)` alignment is only as tight as the operator's reaction
 time, and the same action may be logged across several consecutive frames.
 
@@ -311,6 +313,26 @@ camera acquisition. This allows offline training on recorded demonstrations with
 and is what every training script uses. It is **not** a functioning offline environment: `step()`
 still dereferences `self.gamepad`, so any code path that steps a dummy environment raises. GAIL,
 which must generate fresh trajectories, therefore forces `dummy = False` and cannot run headless.
+
+### 5.5 Dead switches: configuration that changes nothing
+
+A recurring pattern worth collecting in one place, because each of these looks like a tunable knob and
+is not:
+
+| Declared control | Where | Why it is inert |
+|---|---|---|
+| `capture.width`, `capture.height` | `game_env.py:76-77` | assigned to `self.width`/`self.height` and never read; the grab region comes from the live window rectangle |
+| `self.frame_time` | `game_env.py:107, 155` | computed from `target_fps`, never read |
+| `MAX_FPS` | `run_ai.py:32` (120 generic / 30 hajime) | declared, never read; the deployment loop is unpaced |
+| `INPUT_CONFIG` in its entirety (`deadzone`, `camera_sensitivity`, `input_delay`, `aggressiveness`) | `config/game_config.py` | the symbol is never imported by any module in either package |
+| `GAME_CONFIG["aggressiveness"]` | `run_ai.py:180` | the logit-sharpening branch looks the key up at the **top level** of `GAME_CONFIG`, but it is defined inside `INPUT_CONFIG`, so the lookup always misses and defaults to `1.0` — the branch is present and permanently disabled |
+| `TRAINING_CONFIG.window_size`, `dagger_iterations`, `demo_path`, `model_path`, `train_path`, `max_trajectories` | `config/game_config.py` | unread; the LSTM hard-codes a 10-frame window, the recorder hard-codes `max_traj=10`, and the scripts hard-code `./demos/`, `./models/`, `./models/imitation/bc_logs/` |
+| `actions.mappings` in gamepad mode | `game_env.py:216-261` | `step()` dispatches on indices 0–17 directly, so the declared `vg_code` names (`DS4_BUTTON_CROSS`, …) are never resolved and the environment presses `XUSB_GAMEPAD_A/B/X` regardless |
+
+The practical consequence is that **only** `process_name`, `exe_path`/`rom_path`, `window_offset`,
+`capture.internal_width`/`internal_height`, `capture.target_fps`, `capture.buffer_len`,
+`actions.num_actions` and `actions.input_mode` — plus `hide_window` — have any effect. Everything else in
+the configuration is documentation-shaped.
 
 ---
 

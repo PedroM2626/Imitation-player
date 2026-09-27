@@ -50,8 +50,9 @@ Three constraints determine almost every design decision below.
    utils/utils.py — get_last_index(dir, prefix, ext), LSTMWrapper(model)
 ```
 
-Both packages (`generic_agent`, `hajime_agent`) contain this graph. Nine modules are byte-identical
-between them; the divergences are listed in [README §3.1](../README.md#31-the-two-package-fork).
+Both packages (`generic_agent`, `hajime_agent`) contain this graph. Ten of the eighteen modules are
+byte-identical between them; the divergences are listed in
+[README §3.1](../README.md#31-the-two-package-fork).
 
 ## 3. `GenericGameEnv`
 
@@ -255,17 +256,24 @@ Architectural specifics worth recording:
 load zip -> policy.predict(obs) -> threshold to bits -> env.step(bits)
 ```
 
-`run_ai.py` (generic) adds an optional **aggressiveness** term: instead of sampling, it applies
-`action_net` to the features, passes through a sigmoid, and raises the probabilities to a power from
-`INPUT_CONFIG["aggressiveness"]` before thresholding. This sharpens the argmax distribution at the
-cost of suppressing low-confidence actions — an inference-time bias with no evaluation measuring its
-effect. `LSTMWrapper` (`utils/utils.py:42`) exists to route recurrent models through `predict` while
+`run_ai.py` (generic) contains an **aggressiveness** alternative to `policy.predict`: when the factor is
+not `1.0` it runs `extract_features → mlp_extractor → action_net`, sigmoids the logits, multiplies the
+probability of every index whose `mappings` entry has `type == "mouse_button"` by the factor, and then
+samples with `np.random.rand() < probs` (`run_ai.py:180-202`). It reads the factor with
+`GAME_CONFIG.get("aggressiveness", 1.0)` — a **top-level** lookup — while the value is defined inside
+`INPUT_CONFIG`, so the lookup always misses, the factor is always `1.0`, and the branch is dead code
+reachable only by editing the script. Note also that the sampling path bypasses SB3's own action
+masking/dtype handling, so even if enabled it would not be equivalent to `predict(deterministic=False)`.
+
+`LSTMWrapper` (`utils/utils.py:42`) exists to route recurrent models through `predict` while
 calling `reset_hidden()` on done flags, but since `done` is never `True`
 ([README §5.3](../README.md#53-reward-termination-and-the-deployment-loop)), that reset never fires during deployment either.
 
-`get_last_index(dir, prefix, ext)` resolves SB3's `bc_policy<N>.zip` checkpoint numbering by string
-parsing to pick the highest *N*. It compares lexicographically rather than numerically, so
-`bc_policy9.zip` outranks `bc_policy10.zip`.
+`get_last_index(dir, prefix, ext)` resolves SB3's `bc_policy<N>.zip` numbering by matching
+`prefix + r"(\d+)" + ext` and taking `max(int(...))`, returning `-1` when nothing matches; callers do
+check for `-1`. The function is correct. What is *not* correct is the path it is asked to search:
+`run_ai.py:36` sets `STEPS_PATH = "./models/steps"`, a directory no script ever creates, so the
+numbered-checkpoint fallback can never find anything and deployment always loads `models/bc_policy.zip`.
 
 ## 6. Tracking and artefacts
 
@@ -292,7 +300,7 @@ Ordered by the cost they impose on the research:
    adding a reward/terminal signal, which is an environment change, not a script change.
 2. **Stateful extractor.** `TemporalAttentionLSTM`'s internal buffer and hidden state make its output
    a function of call history, breaking the batch-independence assumption the other encoders satisfy.
-3. **Two packages, one code base.** Nine byte-identical modules duplicated; the benchmark's hard-coded
+3. **Two packages, one code base.** Ten modules duplicated byte-for-byte; the benchmark's hard-coded
    baselines already disagree between copies.
 4. **Config is advisory.** Several declared fields are read by nothing, and the field that matters most
    in gamepad mode (`actions.mappings`) is ignored.
