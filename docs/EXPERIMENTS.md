@@ -8,14 +8,18 @@
 
 | Convention | Value | Set by |
 |---|---|---|
-| Working directory | every script must be run **from `<pkg>/notebooks/`** | `sys.path.insert(0, "..")` / `"../utils"` at the top of each script |
-| Demonstration source | `./demos/`, glob `demo*.pt` | hard-coded, *not* `TRAINING_CONFIG["demo_path"]` |
-| Checkpoint destination | `./models/` | hard-coded |
-| MLflow tracking URI | `file:../mlruns` | hard-coded in every script |
-| Device | `cuda`, with a runtime fallback to `cpu` if `th.cuda.is_available()` is false | `compare_models.py:421-426` |
+| Invocation | every entry point is a module invocation from the **repository root**: `python -m agent.cli.<name>` | `agent/cli/common.py` puts the repository root on `sys.path`; no script depends on the current working directory any more |
+| Demonstration source | `runs/<profile>/demos/`, glob `demo*.pt` | `agent/utils/paths.demos_dir`, derived from the profile (`demo_path` no longer exists as a config field) |
+| Checkpoint destination | `runs/<profile>/models/` | `agent/utils/paths.models_dir` |
+| MLflow tracking URI | `file:runs/<profile>/mlruns` | `agent/utils/tracking.configure_store` |
+| Device | `cuda` when `th.cuda.is_available()`, else `cpu`; an explicit `--device` overrides either | `agent/cli/common.resolve_device` (36-44) |
 | Objective | sigmoid-bernoulli BC NLL, **summed over bits**, in **nats** | `imitation.BC` |
-| RNG | `np.random.default_rng(seed=42)` (benchmark only) | `compare_models.py:169` |
+| RNG | `np.random.default_rng(seed=42)` — in every training run, not only the benchmark | `SEED` in `agent/cli/train.py:34`, `agent/cli/train_gail.py:36` |
 | Torch seeding | **none** — no `torch.manual_seed`, no `cudnn.deterministic` | — |
+
+Because every path is derived from the selected profile rather than the working directory, the runs root
+can be relocated wholesale with `IMITATION_RUNS` or `--runs-root`, and two profiles never share a
+demonstration folder.
 
 Because the loss is a *sum* over bits, absolute loss values are only comparable between runs that share
 `num_actions`. The published benchmark uses 9; the Hajime configuration declares 18. Their loss scales
@@ -23,103 +27,132 @@ are not interchangeable, and this is why §DATA 4's marginal baseline must be re
 
 ## 2. Script reference
 
-### 2.1 `record_trajectories.py` — demonstration capture
+### 2.1 `agent/cli/record.py` — demonstration capture
 | | |
 |---|---|
 | Algorithm | none (data collection) |
-| CLI | none; constants at the top of the file |
+| CLI | `--profile`, `--runs-root`, `--max-trajectories` (default: the profile's `recording.max_trajectories`) |
 | Env mode | live (`dummy = False`) |
-| Keys | `K` start/stop recording, `ESC` save and quit; the generic variant adds a keyboard/mouse mapping path |
-| Output | `demos/demo_<n>_<YYYYMMDD>_<HHMMSS>.pt` |
+| Keys | `K` start/stop recording; `ESC`, the window close button and Ctrl+C all flush the in-progress buffer and exit; input is read per the profile's `actions.input_mode`, either the `keyboard_mouse` mapping table or the physical pad with keyboard stand-ins |
+| Output | `runs/<profile>/demos/demo_<n>_<YYYYMMDD>_<HHMMSS>.pt` |
 | Specification | [DATA.md §2](DATA.md#2-recording-protocol) |
 
-### 2.2 `train_agent.py` — behavioural cloning, primary script
+### 2.2 `agent/cli/train.py` — behavioural cloning, the single entry point
 | Flag | Default | Effect |
 |---|---|---|
 | `--epochs` | `TRAINING_CONFIG["epochs"]` (100) | BC epochs |
 | `--batch` | `TRAINING_CONFIG["batch_size"]` (384) | demonstration minibatch size |
 | `--lr` | `TRAINING_CONFIG["learning_rate"]` (1e-4) | constant schedule (`lr_schedule=lambda _: lr`) |
-| `--dagger` | off | accepted; calls `run_dagger_iteration()`, which is a `pass` stub |
-| `--device` | `cuda` | torch device |
-| `--model_path` | `None` | directory or zip of a pretrained policy to continue training from |
+| `--arch` | `naturecnn` | feature extractor, chosen from the registry in `agent/utils/architectures.py` |
+| `--device` | `None` → resolved at runtime (`cuda` when available, else `cpu`) | torch device |
+| `--model_path` | `None` | checkpoint to continue training from; a missing path aborts instead of silently starting from scratch |
 
-Backbone `ActorCriticCnnPolicy` (NatureCNN encoder) unless `policy_kwargs` supplies an extractor.
-Logs to experiment `Hajime_no_Ippo_Imitation_Learning`, run `BC_Training`, and saves
-`models/bc_policy.zip`. Note that the **generic package also writes to the Hajime-named experiment**
-(`generic_agent/notebooks/train_agent.py:406`), which is why the Hajime-titled experiment contains runs
-trained on the generic reconciliation of the corpus.
+Backbone `ActorCriticCnnPolicy` (NatureCNN encoder) unless the selected architecture supplies an
+extractor. A new run logs to experiment `f"{profile}_imitation_bc"` (for example
+`hajime_ippo_imitation_bc`) under a run named after `--arch`, and saves
+`runs/<profile>/models/bc_policy.zip` for `naturecnn` or `<Prefix>_policy.zip` for the registered
+architectures. Every run also records what it trained on — frames, trajectories, action width, distinct
+joint actions and the marginal/uniform reference losses — via `agent/utils/tracking.log_dataset()`, and
+`--width-policy strict|coerce` overrides the profile's demonstration-width policy. The four
+near-duplicate `train_agent*.py` scripts of the old layout, and the inert `--dagger` flag they accepted,
+are gone. The
+historical runs retained in `runs/hajime_ippo/mlruns/` are the ones that all reported into
+`Hajime_no_Ippo_Imitation_Learning`, including those trained on the generic reconciliation of the corpus.
 
-### 2.3 `train_agent_lstm.py`, `train_agent_transformer.py`, `train_agent_impoola.py`
-Same BC loop with a `policy_kwargs = {"features_extractor_class": …}` override.
+### 2.3 `--arch` variants: `lstm`, `transformer`, `impoola` (`impala` and `resnet18` also registered)
+One BC loop with a `policy_kwargs = {"features_extractor_class": …}` override per architecture.
 
-| Script | Extractor | Extra constructor defaults | Experiment | Run name |
+| `--arch` | Extractor | Extra constructor defaults | Experiment | Run name |
 |---|---|---|---|---|
-| `train_agent_lstm.py` | `TemporalAttentionLSTM` | `features_dim=512`, `lstm_hidden_size=256`, `lstm_num_layers=2` | `Generic_Agent_LSTM_IL` | `BC_LSTM_Training` |
-| `train_agent_transformer.py` | `VisionTransformerExtractor` | `embed_dim=256`, `patch_size=16`, `num_heads=4`, `num_layers=4`, `features_dim=512` | `Generic_Agent_Transformer_IL` | `BC_Training_Transformer` |
-| `train_agent_impoola.py` | `ImpoolaCNNExtractor` | `features_dim=512`, `channels_list=[32,64,128]` | `Model_Comparison` | `Impoola_CNN` |
+| `lstm` | `TemporalAttentionLSTM` | `features_dim=512`, `lstm_hidden_size=256`, `lstm_num_layers=2`, `window_size` from `TRAINING_CONFIG["window_size"]` | `hajime_ippo_imitation_bc` | `lstm` |
+| `transformer` | `VisionTransformerExtractor` | `embed_dim=256`, `patch_size=16`, `num_heads=4`, `num_layers=4`, `features_dim=512` | `hajime_ippo_imitation_bc` | `transformer` |
+| `impoola` | `ImpoolaCNNExtractor` | `features_dim=512`, `channels_list=[32,64,128]` | `hajime_ippo_imitation_bc` | `impoola` |
 
-CLI for all three: `--epochs --batch --lr --device`. `train_agent_impoola.py` defaults to **10 epochs**
-while the other two default to the config's 100 — an inconsistency that makes a bare invocation of the
-Impoola script incomparable to a bare invocation of the others.
+CLI for all of them: `--arch --epochs --batch --lr --device --model_path --width-policy`. The old
+scripts disagreed about the default budget — `train_agent_impoola.py` used 10 epochs while the others
+used the config's 100 — and that inconsistency is gone: every architecture takes the same
+`TRAINING_CONFIG` defaults, so a bare invocation is comparable across architectures.
 
-`train_agent_transformer.py` and `train_agent_lstm.py` also accept `--dagger`, likewise inert.
+The `--dagger` flag these scripts accepted was a `pass` stub; it no longer exists. The DAgger loop lives
+in `agent/cli/dagger.py` (§2.8), which calls this trainer itself after each collection round.
 
-### 2.4 `train_imiation.py` — minimal BC
-No CLI at all. Experiment `Hajime_no_Ippo_Imitation_Learning`, run `BC_Training_Simple`.
-**Broken in two ways:** the filename is a misspelling of *imitation*, and it globs `demos*.pt` while the
-recorder writes `demo*.pt`, so it loads zero demonstrations and fails at dataset construction. Its
-`dagger_iteration()` is a `pass` with a `TODO`. Do not use it; it is retained only because notebooks
-reference the name.
+### 2.4 `train_imiation.py` — removed
+This entry point is gone, together with its misspelled filename: the minimal BC loop it held is folded
+into `agent/cli/train.py`, which globs `demo*.pt` (the pattern the recorder writes) rather than the
+`demos*.pt` that never matched anything, and which takes real argparse flags instead of none. Its
+`dagger_iteration()` `pass`-with-`TODO` body is likewise gone, replaced by `agent/cli/dagger.py`. No
+script in the tree references the name any more.
 
-### 2.5 `train_gail.py` — adversarial imitation
+### 2.5 `agent/cli/train_gail.py` — adversarial imitation
 | Flag | Default |
 |---|---|
 | `--timesteps` | 100,000 |
 | `--model_path` | `None` |
 
-Fixed internals: `imitation.GAIL` with `BasicRewardNet` discriminator and a PPO generator
+Fixed internals, now exposed as flags (`--demo-batch-size`, `--gen-batch-capacity`,
+`--disc-updates-per-round`): `imitation.GAIL` with `BasicRewardNet` discriminator and a PPO generator
 (`batch_size=64`, `learning_rate=3e-4`, `n_steps=1024`, `ent_coef=0.01`, `gamma=0.99`);
 `demo_batch_size=64`, generator replay capacity 2048, 4 discriminator updates per round; observations
-normalised with `RunningNorm`. Forces `dummy = False`, so it requires the live game. Experiment
-`Hajime_no_Ippo_Imitation_Learning`, run `GAIL_Run`. **Never completed a run** — no `GAIL_Run` exists in
-the tracking store ([RESULTS.md §8](RESULTS.md#8-evidence-gaps-to-close-in-priority-order)).
+normalised with `RunningNorm`. Forces `dummy = False`, so it requires the live game and therefore Windows.
+New runs use experiment `f"{profile}_gail"` (e.g. `hajime_ippo_gail`). **Never completed a run** — no
+`GAIL_Run` exists in the tracking store
+([RESULTS.md §8](RESULTS.md#8-evidence-gaps-to-close-in-priority-order)).
 
-### 2.6 `compare_models.py` — the benchmark harness
+### 2.6 `agent/cli/benchmark.py` — the benchmark harness
 | Flag | Default | Effect |
 |---|---|---|
 | `--epochs` | 10 | applied to every architecture |
 | `--batch` | 384 | |
 | `--lr` | 1e-4 | |
-| `--device` | `cuda` | |
-| `--only-new` | off | trains Impala-CNN and ResNet-18 only; substitutes **hard-coded** constants for the other four |
+| `--device` | `None` → resolved at runtime | |
+| `--archs` | all six | subset trained now; the remaining columns are read back from the MLflow store instead of from hard-coded constants |
 
 Sequence per architecture: load all demos → build the dummy env + wrappers → construct
 `ActorCriticCnnPolicy` with the extractor (or pass `policy=None` for NatureCNN) → `BC(...)` →
-`train(n_epochs, progress_bar=True)` → save `models/<Name>_policy.zip` → log the four summary metrics.
-Then `save_and_update_results()` regenerates `models/comparison_results.md` **and rewrites the marked
-region of `README.md`**. See §5.
+`train(n_epochs, progress_bar=True)` → save `runs/<profile>/models/<Name>_policy.zip` → report the four
+summary metrics (`final_loss`, `training_time_s`, `num_params`, `model_size_mb`), which reach MLflow only
+through `agent.cli.train.main`'s own run. Then `regenerate_readme()` and `write_report()` regenerate
+`runs/<profile>/models/comparison_results.md` **and rewrites the marked region of `README.md`**. See §5.
 
-### 2.7 `run_ai.py`, `run_ai_lstm.py`, `run_ai_transformer.py` — deployment
-No CLI. Load the newest matching checkpoint via `get_last_index`, then loop `policy.predict(obs)` →
-`env.step(...)`. Keys: `K` toggles AI against human, `ESC` quits. Inference pacing is a script constant:
-`MAX_FPS` is declared in these scripts (120 in `generic_agent`, 30 in `hajime_agent`) but **never read**,
-so the loop is unpaced. `generic_agent/notebooks/run_ai.py` additionally
-contains the `aggressiveness` branch (`action_net` → sigmoid → multiply the mouse-button probabilities →
-Bernoulli-sample), which is dead: the factor is looked up at the top level of `GAME_CONFIG` while it is
-defined in `INPUT_CONFIG`, so it always resolves to `1.0` and `policy.predict` is used instead
-([ARCHITECTURE.md §5](ARCHITECTURE.md#5-inference-path-run_aipy)).
-**These scripts log nothing**: no metric, no MLflow run, no counter of frames or actions. Deployment is
-therefore unaudited and unmeasured.
+### 2.7 `agent/cli/deploy.py` — deployment
+| Flag | Default | Effect |
+|---|---|---|
+| `--arch` | `naturecnn` | selects the checkpoint prefix to resolve (`bc_policy`, `bc_policy_lstm`, `bc_policy_transformer`, `ImpoolaCNN_policy`, …) |
+| `--model` | `None` | explicit checkpoint path, bypassing resolution |
+| `--max-steps` | `None` | stop after this many policy steps |
+| `--start-manual` | off | begin with the human in control |
 
-### 2.8 `run_dagger.py` — interactive correction
-No CLI. The policy acts; `L` transfers authority to the human; the human's inputs during those windows
-are appended as a new demonstration. Only the *collection* half of DAgger exists — see §2.2/§2.4 stubs.
+Loads the newest matching checkpoint via `resolve_checkpoint` (final `<prefix>.zip`, else the highest
+numbered one), then loops `policy.predict(obs)` → `env.step(...)`. Keys: `K` toggles AI against human,
+`ESC` quits; manual play reads the same `HumanInput` the recorder uses. Inference pacing is now
+**enforced**: the loop sleeps out the remainder of the `deploy.fps` budget, so the declared rate is
+behavioural rather than documentary. The `aggressiveness` knob is read from
+`GAME_CONFIG["deploy"]["aggressiveness"]`, where the profile actually defines it, and applies to the
+indices named in `deploy.attack_buttons`, so the sharpening path is reachable by editing the profile
+([ARCHITECTURE.md §5](ARCHITECTURE.md#5-inference-path-agentclideploypy)).
+**This script logs nothing**: no metric, no MLflow run, no artefact. It counts the steps it took and
+prints the total on exit, but deployment remains otherwise unaudited and unmeasured.
+
+### 2.8 `agent/cli/dagger.py` — interactive correction
+| Flag | Default | Effect |
+|---|---|---|
+| `--arch` | `naturecnn` | policy to collect corrections for |
+| `--rounds` | `TRAINING_CONFIG["dagger_iterations"]` (3) | collect-then-retrain iterations |
+| `--seconds` | 120 | collection time per round |
+| `--epochs` / `--batch` / `--lr` | `None` → `TRAINING_CONFIG` | passed through to the retrain call |
+| `--collect-only` | off | stop after collection, do not retrain |
+
+The policy acts; holding `L` transfers authority to the human, and releasing it flushes the recorded
+segment to `runs/<profile>/demos/demo_dagger_<profile>_<YYYYMMDD>_<HHMMSS>.pt`. Unlike the old script,
+this one drives the aggregation half of the loop as well: after each round it re-reads the corpus, prints
+the new marginal baseline, and calls `agent.cli.train.main` to retrain over all of `demos/` — so the
+former "`pass` stub" situation described in §2.2/§2.4 no longer exists.
 
 ## 3. Metric definitions
 
 Emitted per gradient step by `imitation`'s logger and forwarded to MLflow under the prefix
-`<Model>/` (`MLflowOutputFormat(prefix=f"{name}/")`), so a run's tree looks like
-`metrics/NatureCNN/bc/loss`, `metrics/NatureCNN/bc/entropy`, …
+`<Model>/` (`tracking.MLflowOutputFormat(prefix=f"{arch.name}/")`, `agent/utils/tracking.py`), so a run's
+tree looks like `metrics/NatureCNN/bc/loss`, `metrics/NatureCNN/bc/entropy`, …
 
 | Key | Definition | Informative? |
 |---|---|---|
@@ -129,7 +162,7 @@ Emitted per gradient step by `imitation`'s logger and forwarded to MLflow under 
 | `bc/entropy` | mean policy entropy over the Bernoulli bits | yes — a collapse monitor |
 | `bc/ent_loss` | entropy bonus term (negative; `ent_coef = 0` by default) | no, only tracks the coefficient |
 | `bc/l2_norm` | gradient L2 norm | yes — divergence/instability detector |
-| `bc/l2_loss` | weighted L2 penalty | **dead: identically `0.0` in every retained log** |
+| `bc/l2_loss` | weighted L2 penalty | **dead: identically `0.0` in every retained log**; new runs exclude it from the store altogether (`tracking.DEFAULT_SKIP_KEYS`), because `l2_weight` defaults to `0.0` |
 | `bc/epoch` | epoch index at the time of logging | — |
 | `bc/batch` | cumulative batch counter | — |
 | `bc/samples_so_far` | cumulative demonstration samples consumed | needed to reconstruct the effective dataset size |
@@ -160,46 +193,58 @@ Caveats to keep in mind when reading any of these:
 ## 4. Reading MLflow
 
 ```bash
-cd generic_agent/notebooks
-mlflow ui --backend-store-uri file:../mlruns      # http://localhost:5000
+# from the repository root
+mlflow ui --backend-store-uri file:runs/hajime_ippo/mlruns      # http://localhost:5000
 ```
 
-Experiments present: `Model_Comparison` (26 runs), `Hajime_no_Ippo_Imitation_Learning` (6 runs in the
-generic store, 1 in the hajime store), `Default` (empty). The store is git-ignored, so a fresh clone has
+The tracking URIs the scripts set are derived from the profile, so one store per profile replaces the two
+per-package stores; `--runs-root`/`IMITATION_RUNS` relocate them. Experiments present in
+`runs/hajime_ippo/mlruns/`: `Model_Comparison` (26 runs), `Hajime_no_Ippo_Imitation_Learning` (6 runs
+carried over from the generic store, 1 from the hajime one — the two entries keep the names they were
+created under), `Default` (empty). Runs from here on land in derived names such as
+`hajime_ippo_imitation_bc` and `hajime_ippo_gail`. The store is git-ignored, so a fresh clone has
 nothing to show — see [README §15.2](../README.md#152-what-is-and-is-not-versioned).
 
 ## 5. Modifying `README.md` automatically
 
-`compare_models.py` rewrites this repository's top-level README on every run:
+`python -m agent.cli.benchmark` rewrites this repository's top-level README on every run:
 
 1. It regenerates the table between `<!-- BENCHMARK_START -->` and `<!-- BENCHMARK_END -->`, in a fixed
    column order: NatureCNN, CNN+LSTM+Attention, ViT, Impoola-CNN, Impala-CNN, ResNet-18.
 2. If the string `**Conclusion**:` appears in the README, it replaces that entire paragraph with a
    sentence **derived from the measured values** (lowest-loss model and most efficient model, with loss,
-   MB and parameter figures). Keep that marker present exactly once or the replacement silently
-   no-ops; keep it to a single paragraph, since the reconstruction preserves everything after the
-   conclusion's first line.
+   MB and parameter figures). The hand-written conclusion the old harness injected — which contradicted
+   the table it sat under — is gone; if no loss/parameter pair can be measured, the generator declines to
+   write one and leaves the README paragraph as it is. Keep that marker present exactly once or the
+   replacement silently no-ops; keep it to a single paragraph, since the reconstruction preserves
+   everything after the conclusion's first line.
 3. Anything outside those two regions is untouched.
 
-The fallback baseline constants in `main()` are used whenever an architecture is not retrained. They
-were realigned with the completed MLflow runs in this revision; the Impala-CNN and ResNet-18 entries
-previously held values from *different* runs of the same configuration (2.945390/406.6 s and
-3.018901/391.1 s), which is how the generated report and the README disagreed. Two lessons: never let
-a report carry numbers it did not measure, and a fallback table that must be hand-updated will drift.
+There are no fallback baseline constants any more. An architecture not selected with `--archs` is read
+back from the MLflow store and rendered from its own recorded metrics; an architecture with no run in the
+store renders as `-` with a `Runs available` count of 0, and is never substituted from a constant. The
+previous design did exactly that: the `main()` dict's Impala-CNN and ResNet-18 entries held values from
+*different* runs of the same configuration (2.945390/406.6 s and 3.018901/391.1 s), which is how the
+generated report and the README disagreed. Two lessons: never let a report carry numbers it did not
+measure, and a fallback table that must be hand-updated will drift.
 
 ## 6. Adding a new architecture
 
-1. Implement `class MyExtractor(BaseFeaturesExtractor)` in `generic_agent/utils/`, taking
+1. Implement `class MyExtractor(BaseFeaturesExtractor)` in `agent/utils/`, taking
    `(observation_space, features_dim=512, **kwargs)` and mapping `(B, 4, 128, 128) → (B, features_dim)`.
    Keep it **stateless** — do not replicate `TemporalAttentionLSTM`'s cross-call buffer
-   ([ARCHITECTURE.md §4.5](ARCHITECTURE.md#45-temporalattentionlstm-utilsgame_envpy379)).
-2. Register it in `compare_models.py`'s architecture list with its `policy_kwargs`, and add the key to
-   `model_keys` and `display_names`.
-3. **Compute a per-bit marginal baseline for the corpus and log it** before judging the run; a model
-   above `Σ H(m_i)` has learned the prior, not a policy
+   ([ARCHITECTURE.md §4.5](ARCHITECTURE.md#45-temporalattentionlstm-agentutilstemporallstmpy28)).
+2. Add one entry to `ARCHITECTURES` in `agent/utils/architectures.py` with its `name`,
+   `checkpoint_prefix`, `factory` and constructor `kwargs`; the trainer, the deployer and the benchmark all
+   read that registry. To appear as a benchmark column, add the key to `COLUMN_ORDER` and `DISPLAY` in
+   `agent/cli/benchmark.py`.
+3. A per-bit marginal baseline is computed and logged for you: `agent.utils.demos.summarise()` produces
+   `marginal_baseline_nats` and `agent.utils.tracking.log_dataset()` writes it into the run, and
+   `agent.cli.train` prints the run's margin against it. A model above `Σ H(m_i)` has still learned the
+   prior, not a policy
    ([DATA.md §4](DATA.md#4-action-distribution), [RESULTS.md §5](RESULTS.md#5-trivial-baselines-what-the-reported-losses-actually-mean)).
-4. Add a fallback entry to the `baselines` dict, or run the full sweep so every column is measured in
-   the same pass.
+4. Either run the full sweep so every column is measured in the same pass, or pass `--archs` and accept
+   that unmeasured columns are filled from the store — or left as `-` when the store has nothing.
 5. Report ≥5 seeds and a mean ± SD. Single runs on this corpus move by up to 0.117 nats
    ([RESULTS.md §4](RESULTS.md#4-run-to-run-dispersion)).
 
@@ -209,8 +254,9 @@ In order of how much each invalidates current claims:
 
 1. **No held-out set.** Add a split over demonstrations (leave-one-session-out is available today with
    four generic files) and report per-bit accuracy, per-bit F1 and joint exact-match accuracy on it.
-2. **No marginal baseline.** Log `Σ H(m_i)` per run; without it the loss numbers have no reference point,
-   and §DATA 4 shows every published run is worse than this trivial predictor.
+2. **No marginal baseline in the historical runs.** `Σ H(m_i)` is logged per run from now on, but the
+   retained benchmark runs were recorded without it, and §DATA 4 shows every published run is worse than
+   this trivial predictor.
 3. **No seed control.** Seed torch, enable `cudnn.deterministic`, and run repeated seeds; the current
    dispersion data (§RESULTS 4) is incidental, which is worse than being planned.
 4. **No closed-loop metric.** Blocked on the environment's absent reward/terminal signal
@@ -218,5 +264,6 @@ In order of how much each invalidates current claims:
 5. **Budget too short to discriminate.** 10 epochs; the 300-epoch reference run is 1.28 nats better than
    the marginal bound, so the discriminating regime is somewhere between 10 and 300 epochs and has not
    been sampled.
-6. **Nothing logs the effective dataset size into MLflow**, so no run records how many frames it
-   actually trained on — and §DATA 6.2 shows files can be skipped silently.
+6. **Dataset size is now recorded, but not checked.** Every run logs its frame and trajectory counts
+   (§DATA 6.2), so a silently truncated corpus can be spotted after the fact; no run asserts the count it
+   expected, and an unreadable demo is only caught because `load_demos` raises.

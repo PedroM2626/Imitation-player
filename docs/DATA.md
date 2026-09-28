@@ -9,17 +9,21 @@
 
 | Path | Contents | Size | Versioned |
 |---|---|---|---|
-| `generic_agent/notebooks/demos/demo_*.pt` | 4 trajectories, 27,161 action frames | ~3.1 GB total | **no** — `*.pt` is git-ignored |
-| `hajime_agent/notebooks/demos/demo_*.pt` | 1 trajectory, 6,150 action frames | 546 MB | **no** |
-| `generic_agent/notebooks/models/bc_policy.zip` | reference BC checkpoint | 17 MB | yes |
-| `generic_agent/notebooks/models/imitation/bc_logs/progress.csv` | 43-row training log of the 300-epoch run | 6 KB | yes |
+| `runs/hajime_ippo/demos/demo_*.pt` (four sessions recorded under the generic configuration) | 4 trajectories, 27,161 action frames | ~3.1 GB total | **no** — `*.pt` and `runs/*/demos/` are git-ignored |
+| `runs/hajime_ippo/demos/demo_0_20260619_103226.pt` (the Hajime session) | 1 trajectory, 6,150 action frames | 546 MB | **no** |
+| `runs/hajime_ippo/models/bc_policy.zip` | reference BC checkpoint | 17 MB | **no** — `*.zip` is git-ignored; the reference policy is exported as a release asset |
+| `runs/hajime_ippo/logs/progress.csv` | 43-row training log of the 300-epoch run | 6 KB | yes |
+
+Data lives outside the code, rooted at `runs/<profile>/`; `IMITATION_RUNS` or `--runs-root` relocate the
+root. `progress.csv` and `models/comparison_results.md` are the only run artefacts under version control.
 
 The corpus is therefore **single-machine data**. Nothing in the repository lets a reader obtain the
 demonstrations that produced the benchmark; §7 states what would be required.
 
 ## 2. Recording protocol
 
-`notebooks/record_trajectories.py` is the only writer of demonstration files.
+`agent/cli/record.py` (run as `python -m agent.cli.record --profile <name>`) is the only writer of
+demonstration files.
 
 ### 2.1 Loop
 
@@ -36,17 +40,19 @@ loop:
   handle hotkeys
 ```
 
-Hotkeys, as implemented: `K` starts and stops recording and **is the only key that writes a file**;
-`ESC` breaks the loop without flushing, so an in-progress recording is lost (the overlay text
-"`[ESC] Save & Exit`" and an inline comment about a `finally`-block save are both inaccurate —
-[TRAINING_GUIDE §3.1](TRAINING_GUIDE.md#31-protocol)).
-The generic variant additionally reads a key-mapping table for `keyboard_mouse` mode; the hajime
-variant is gamepad-only and hard-codes an 18-wide zero vector.
+Hotkeys, as implemented: `K` starts and stops recording, and **each stop is what writes a file**; `ESC`,
+the window close button and Ctrl+C now flush an in-progress recording through
+`TrajectoryRecorder.finish()` before exiting (previously only the `K` stop-transition wrote one, so an
+interrupted take was lost), which makes the overlay text "`[ESC] Save & Exit`" accurate
+([TRAINING_GUIDE §3.1](TRAINING_GUIDE.md#31-protocol)).
+One recorder serves both profiles: `agent/utils/input_map.HumanInput` reads the key-mapping table in
+`keyboard_mouse` mode and the physical pad (or its keyboard stand-ins) in gamepad mode, sized to the
+profile's `actions.num_actions`.
 
 ### 2.2 Written artefact
 
 ```
-notebooks/demos/demo_<index>_<YYYYMMDD>_<HHMMSS>.pt
+runs/<profile>/demos/demo_<index>_<YYYYMMDD>_<HHMMSS>.pt
 ```
 
 Contents: a Python **list containing one** `imitation.data.types.Trajectory`, serialised with
@@ -77,14 +83,17 @@ shape**: the env declares `(128, 128, 1)` and only the `VecFrameStack` wrapper m
 
 Recomputed from the files on disk:
 
-| Package | Session | Frames (`acts`) | Width | Distinct joint actions | Modal joint action share | Top-5 share | Joint entropy |
+All five files now live in `runs/hajime_ippo/demos/`; the "Configuration" column names the recording
+setup each session was captured under, not a separate data directory.
+
+| Configuration | Session | Frames (`acts`) | Width | Distinct joint actions | Modal joint action share | Top-5 share | Joint entropy |
 |---|---|---|---|---|---|---|---|
-| `generic_agent` | `demo_0_20260523_221206` | 6,301 | 18 | 35 | 0.2595 | 0.7670 | 2.158 bits |
-| `generic_agent` | `demo_1_20260523_221830` | 7,068 | 18 | 37 | 0.2473 | 0.7172 | 2.264 bits |
-| `generic_agent` | `demo_0_20260523_224241` | 8,149 | **7** | 36 | 0.2746 | 0.8165 | 2.059 bits |
-| `generic_agent` | `demo_1_20260523_224751` | 5,643 | **7** | 39 | 0.1845 | 0.6814 | 2.413 bits |
-| `generic_agent` | **pooled, reconciled to 18** | **27,161** | 18 | **45** | 0.2485 | 0.7261 | **2.286 bits** |
-| `hajime_agent` | `demo_0_20260619_103226` | 6,150 | 18 | **24** | 0.5127 | 0.7995 | 1.875 bits |
+| generic | `demo_0_20260523_221206` | 6,301 | 18 | 35 | 0.2595 | 0.7670 | 2.158 bits |
+| generic | `demo_1_20260523_221830` | 7,068 | 18 | 37 | 0.2473 | 0.7172 | 2.264 bits |
+| generic | `demo_0_20260523_224241` | 8,149 | **7** | 36 | 0.2746 | 0.8165 | 2.059 bits |
+| generic | `demo_1_20260523_224751` | 5,643 | **7** | 39 | 0.1845 | 0.6814 | 2.413 bits |
+| generic | **pooled, reconciled to 18** | **27,161** | 18 | **45** | 0.2485 | 0.7261 | **2.286 bits** |
+| hajime | `demo_0_20260619_103226` | 6,150 | 18 | **24** | 0.5127 | 0.7995 | 1.875 bits |
 
 Wall-clock duration is not stored. At the configured `target_fps` of 60 the generic pool is ≈ 7.5
 minutes of play and the hajime session ≈ 1.7 minutes; because capture is asynchronous and the recorder
@@ -112,8 +121,8 @@ loss baseline in [RESULTS.md §5](RESULTS.md#5-trivial-baselines-what-the-report
 Four structural properties:
 
 1. **11 of 18 action bits never fire.** Triggers, stick press and the entire discretised camera axis
-   (bits 10–17) are exactly zero in every file of both packages. The declared action space is 18
-   dimensional; the *used* action space is 7 dimensional.
+   (bits 10–17) are exactly zero in every file of both recording configurations. The declared action
+   space is 18 dimensional; the *used* action space is 7 dimensional.
 2. **Severe class imbalance.** Bits 0 and 1 account for ~87 % of all actuations in the generic pool;
    bits 5 and 6 fire below 1 %.
 3. **The observed joint distribution is tiny and concentrated.** 45 distinct joint vectors occur in
@@ -151,26 +160,35 @@ an easy, and useless, shortcut.
 ## 6. Integrity problems, stated plainly
 
 ### 6.1 Mixed action widths inside one corpus
-Two of the four generic files are 18-wide and two are 7-wide, while `generic_agent/config/game_config.py`
-declares `num_actions = 9`. The loaders reconcile by truncating `18 → 9` and zero-padding `7 → 9`
-(`generic_agent/notebooks/compare_models.py:123-127`, and the equivalent block in
-`generic_agent/notebooks/train_agent.py`). Because both source widths encode the same first seven
-semantics, the reconciled labels are *coherent*, but the reconciliation is **silent**: it emits no
-message, and it means the published benchmark trained on a 9-bit space assembled from data recorded
-under two different action regimes, for a game that is not the one the generic config targets.
+Two of the four generic files are 18-wide and two are 7-wide, while the `roblox` profile
+(`agent/config/profiles/roblox.py`, the configuration the generic sessions were recorded under) declares
+`num_actions = 9`. The published benchmark reconciled that by truncating `18 → 9` and zero-padding
+`7 → 9` silently, with no message emitted, which is how a 9-bit label space was assembled from data
+recorded under two different action regimes, for a game that is not the one that profile targets. That
+reconciliation is no longer the default: `agent/utils/demos.load_demos()` runs under the profile's
+`actions.width_policy`, whose default `strict` raises `DemoError` naming the file and both widths, and
+the old behaviour is available only as an explicit, per-file-warned `coerce` (`--width-policy coerce`).
+Because both source widths encode the same first seven semantics, the reconciled labels are *coherent* —
+but re-running the published configuration on this corpus now refuses to load it unless the operator opts
+in.
 
-### 6.2 Failures are swallowed
-Demo loading is wrapped per-file in `try/except Exception` that prints one line and continues. A
-corrupted, wrong-width or unreadable trajectory therefore reduces the dataset without failing the run.
-There is no assertion that the number of loaded trajectories, or their total frame count, matches what
-was expected — and nothing logs the frame count into MLflow, so a benchmark run trained on half the
-data would be indistinguishable from one trained on all of it.
+### 6.2 Failures used to be swallowed
+Demo loading was wrapped per-file in `try/except Exception` that printed one line and continued, so a
+corrupted, wrong-width or unreadable trajectory reduced the dataset without failing the run. That is now
+a hard error: `load_demos()` collects every unreadable file and raises `DemoError` listing all of them
+(`agent/utils/demos.py:87`). The corpus size is also recorded — `agent.utils.demos.summarise()` computes
+the frame count, trajectory count, action width and distinct joint-action count, and
+`agent.utils.tracking.log_dataset()` writes them, with the two reference losses, into every run, so a
+benchmark trained on half the data is no longer indistinguishable from one trained on all of it. There is
+still no assertion that the loaded count matches an *expected* count, and no split to check it against.
 
 ### 6.3 Capture can degrade invisibly
 If a grab returns nothing, the previous frame is re-emitted (or a black frame when no previous frame
-exists). Stale frames are indistinguishable from a static game screen, and the demo files carry no
-counter of dropped grabs. Since the label is the human's input at that instant, a stale frame produces
-a `(frozen screen, new action)` pair that teaches the model the screen does not matter.
+exists). The environment now increments `self.dropped_frames` rather than degrading wholly unremarked,
+but the counter is neither printed nor carried into the demonstrations, so stored stale frames remain
+indistinguishable from a static game screen. Since the label is the human's input at that instant, a
+stale frame produces a `(frozen screen, new action)` pair that teaches the model the screen does not
+matter.
 
 ### 6.4 No provenance metadata
 Demonstration files carry no recording configuration: not the capture geometry, not the game build, not
@@ -179,9 +197,9 @@ recorder. The width discrepancy in §6.1 is only discoverable by opening the fil
 demo (or `infos` populated instead of left as empty dicts) would make the corpus self-describing.
 
 ### 6.5 No train/val/test partition exists
-Every script uses the whole directory `./demos/` as training data. There is no split, no held-out
-demonstration, and no leave-one-session-out scheme anywhere in the repository. This is the root cause
-of the absence of generalisation numbers, not a mere missing script.
+Every script uses the whole directory `runs/<profile>/demos/` as training data. There is no split, no
+held-out demonstration, and no leave-one-session-out scheme anywhere in the repository. This is the root
+cause of the absence of generalisation numbers, not a mere missing script.
 
 ## 7. What the corpus needs
 
@@ -190,7 +208,10 @@ Ordered by how much each changes what can be claimed:
 1. **A held-out split.** Even a leave-one-file-out scheme over the four generic sessions gives a real
    generalisation number at zero recording cost.
 2. **Demonstrations that exercise bits 7–17**, or an honest reduction of the action space to the 7
-   bits that are used, with the loss re-derived so cross-study comparisons are possible.
+   bits that are used, with the loss re-derived so cross-study comparisons are possible. Those bits are
+   no longer unreachable by code: `agent/utils/input_map.py` gives every entry of the gamepad table a
+   physical source (triggers via `bLeftTrigger`/`bRightTrigger`, camera via `sThumbRX/RY`), so this is now
+   purely a recording task.
 3. **Volume.** 27 k frames at 128×128 is small by any standard for pixel-based imitation; §RESULTS 6
    shows the models had not converged by 10 epochs and had not beaten the marginal predictor either.
    The 300-epoch run reaching 1.33 nats indicates the existing data still rewards more optimisation
@@ -201,4 +222,7 @@ Ordered by how much each changes what can be claimed:
    corpora, or a release asset / datasetDOI for large ones — so the study in README §10 is reproducible
    by someone other than the operator.
 6. **A per-bit marginal baseline computed and logged inside the training scripts**, so that a run which
-   fails to beat `Σ H(m_i)` cannot be reported as a result.
+   fails to beat `Σ H(m_i)` cannot be reported as a result. This is now in place —
+   `agent.utils.demos.summarise()` computes `marginal_baseline_nats` and
+   `agent.utils.tracking.log_dataset()` logs it, and `agent.cli.train` prints the margin of the final
+   loss against it — but nothing yet *refuses* to report a run above the baseline.
