@@ -63,18 +63,22 @@ jobs:
       - name: Test suite
         run: python -m pytest -q --timeout=900
 
-      - name: Train one epoch on the reference corpus path layout
+      - name: Train one epoch against a synthetic corpus
+        env:
+          IMITATION_RUNS: ${{ github.workspace }}/.ci-runs
         run: |
           python - <<'PY'
-          import numpy as np, torch as th, pathlib
+          import numpy as np, os, pathlib, torch as th
           from imitation.data.types import Trajectory
-          d = pathlib.Path("runs/ci_smoke/demos"); d.mkdir(parents=True, exist_ok=True)
+
+          demo_dir = pathlib.Path(os.environ["IMITATION_RUNS"]) / "hajime_ippo" / "demos"
+          demo_dir.mkdir(parents=True, exist_ok=True)
           rng = np.random.default_rng(0)
           obs = rng.integers(0, 256, size=(41, 4, 128, 128), dtype=np.uint8)
           acts = (rng.random((40, 18)) > 0.7).astype(np.float32)
-          th.save([Trajectory(obs=obs, acts=acts, infos=None, terminal=False)], d / "demo_0_ci.pt")
+          th.save([Trajectory(obs=obs, acts=acts, infos=None, terminal=False)],
+                  demo_dir / "demo_0_ci.pt")
+          print("wrote", demo_dir / "demo_0_ci.pt")
           PY
-          python -m agent.cli.train --profile hajime_ippo --runs-root runs_ci \
-            --arch impoola --epochs 1 --batch 16 --device cpu
-        env:
-          IMITATION_RUNS: ${{ github.workspace }}/runs_ci
+          python -m agent.cli.train --profile hajime_ippo --arch impoola \
+            --epochs 1 --batch 16 --device cpu
