@@ -8,7 +8,7 @@ so runs land where a reader expects instead of all reporting into
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 from stable_baselines3.common.logger import KVWriter
@@ -31,7 +31,7 @@ class MetricCapture(KVWriter):
     """Keeps the last value seen for each logged metric."""
 
     def __init__(self) -> None:
-        self.metrics: Dict[str, float] = {}
+        self.metrics: dict[str, float] = {}
 
     def write(self, key_values, key_excluded, step=0):
         for key, value in key_values.items():
@@ -75,7 +75,7 @@ def configure_store(profile: str) -> None:
     mlflow.set_tracking_uri(f"file:{store}")
 
 
-def start_run(profile: str, purpose: str, run_name: str, params: Optional[Dict[str, Any]] = None):
+def start_run(profile: str, purpose: str, run_name: str, params: dict[str, Any] | None = None):
     configure_store(profile)
     mlflow.set_experiment(experiment_name(profile, purpose))
     run = mlflow.start_run(run_name=run_name)
@@ -84,7 +84,7 @@ def start_run(profile: str, purpose: str, run_name: str, params: Optional[Dict[s
     return run
 
 
-def log_dataset(profile: str, stats: Dict[str, Any]) -> None:
+def log_dataset(profile: str, stats: dict[str, Any]) -> None:
     """Record what the run actually trained on.
 
     Without this a corpus that lost files to a silent load error is

@@ -6,7 +6,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import torch as th
@@ -23,17 +23,24 @@ from agent.utils.game_env import GenericGameEnv  # noqa: E402
 
 
 def add_common(parser: argparse.ArgumentParser, training: bool = False) -> None:
-    parser.add_argument("--profile", default=os.environ.get("IMITATION_PROFILE"),
-                        help="game profile to use (see agent/config/profiles/) "
-                             f"[env IMITATION_PROFILE, default hajime_ippo]")
-    parser.add_argument("--runs-root", default=None,
-                        help="override the runs/ directory holding demos, models and mlruns")
+    parser.add_argument(
+        "--profile",
+        default=os.environ.get("IMITATION_PROFILE"),
+        help="game profile to use (see agent/config/profiles/) "
+        "[env IMITATION_PROFILE, default hajime_ippo]",
+    )
+    parser.add_argument(
+        "--runs-root",
+        default=None,
+        help="override the runs/ directory holding demos, models and mlruns",
+    )
     if training:
-        parser.add_argument("--device", default=None,
-                            help="torch device; defaults to cuda when available, else cpu")
+        parser.add_argument(
+            "--device", default=None, help="torch device; defaults to cuda when available, else cpu"
+        )
 
 
-def resolve_device(explicit: Optional[str]) -> str:
+def resolve_device(explicit: str | None) -> str:
     """Honour an explicit --device, otherwise pick the best available."""
     if explicit:
         return explicit
@@ -44,21 +51,21 @@ def resolve_device(explicit: Optional[str]) -> str:
     return "cpu"
 
 
-def load(explicit: Optional[str], runs_root: Optional[str] = None) -> Dict[str, Any]:
+def load(explicit: str | None, runs_root: str | None = None) -> dict[str, Any]:
     profile = load_profile(explicit)
     if runs_root:
         os.environ["IMITATION_RUNS"] = runs_root
     return profile
 
 
-def build_config(game_config: Dict[str, Any], dummy: bool) -> Dict[str, Any]:
+def build_config(game_config: dict[str, Any], dummy: bool) -> dict[str, Any]:
     """Copy a profile's GAME_CONFIG and force the dummy (no-window) flag."""
     config = dict(game_config)
     config["dummy"] = dummy
     return config
 
 
-def wrapped_env(config: Dict[str, Any]) -> DummyVecEnv:
+def wrapped_env(config: dict[str, Any]) -> DummyVecEnv:
     """DummyVecEnv -> VecTransposeImage -> VecFrameStack(4): (1,128,128) -> (4,128,128)."""
     env = GenericGameEnv(config)
     env = DummyVecEnv([lambda: env])
@@ -67,8 +74,11 @@ def wrapped_env(config: Dict[str, Any]) -> DummyVecEnv:
     return env
 
 
-def action_names(profile: Dict[str, Any]) -> list:
-    return [m.get("name", f"ACT_{i}") for i, m in enumerate(profile["GAME_CONFIG"]["actions"]["mappings"])]
+def action_names(profile: dict[str, Any]) -> list:
+    return [
+        m.get("name", f"ACT_{i}")
+        for i, m in enumerate(profile["GAME_CONFIG"]["actions"]["mappings"])
+    ]
 
 
 def header(title: str) -> None:
@@ -92,5 +102,16 @@ def cli_entry(func):
     return wrapper
 
 
-__all__ = ["add_common", "resolve_device", "load", "build_config", "wrapped_env",
-           "action_names", "header", "cli_entry", "num_actions", "paths", "np"]
+__all__ = [
+    "add_common",
+    "resolve_device",
+    "load",
+    "build_config",
+    "wrapped_env",
+    "action_names",
+    "header",
+    "cli_entry",
+    "num_actions",
+    "paths",
+    "np",
+]

@@ -21,6 +21,7 @@ def test_empty_directory_names_the_fix(corpus):
 def test_strict_policy_refuses_a_mismatched_width(runs_root):
     demos_dir = runs_root / "hajime_ippo" / "demos"
     from tests.conftest import make_demos
+
     make_demos(demos_dir, num_actions=18, trajectories=1)
     make_demos(demos_dir, num_actions=18, width_override=7, trajectories=1, seed=5)
 
@@ -31,6 +32,7 @@ def test_strict_policy_refuses_a_mismatched_width(runs_root):
 def test_coerce_policy_pads_and_warns(runs_root, capsys):
     demos_dir = runs_root / "hajime_ippo" / "demos"
     from tests.conftest import make_demos
+
     make_demos(demos_dir, num_actions=18, trajectories=1)
     make_demos(demos_dir, num_actions=18, width_override=7, trajectories=1, seed=5)
 
@@ -69,9 +71,17 @@ def test_uniform_baseline_is_nats_over_bits(corpus):
 def test_dead_bits_are_detected(corpus):
     trajectories = demos.load_demos(corpus, 18)
     # Zero out the upper half of every action vector.
-    zeroed = [type(t)(obs=t.obs, acts=np.concatenate(
-        [t.acts[:, :9], np.zeros((t.acts.shape[0], 9), np.float32)], axis=1),
-        infos=None, terminal=False) for t in trajectories]
+    zeroed = [
+        type(t)(
+            obs=t.obs,
+            acts=np.concatenate(
+                [t.acts[:, :9], np.zeros((t.acts.shape[0], 9), np.float32)], axis=1
+            ),
+            infos=None,
+            terminal=False,
+        )
+        for t in trajectories
+    ]
     stats = demos.summarise(zeroed, 18)
     assert all(v == 0.0 for v in stats["marginals"][9:])
     # The entropy is computed on probabilities clipped away from exactly 0/1,

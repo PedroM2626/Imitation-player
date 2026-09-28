@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List, Optional
 
 
 def get_last_index(directory: Path, prefix: str, suffix: str = ".zip") -> int:
@@ -19,13 +18,19 @@ def get_last_index(directory: Path, prefix: str, suffix: str = ".zip") -> int:
     if not directory.exists():
         return -1
     pattern = re.compile(re.escape(prefix) + r"(\d+)" + re.escape(suffix) + r"$")
-    indices = [int(m.group(1)) for f in directory.iterdir() if f.is_file()
-               for m in [pattern.search(f.name)] if m]
+    indices = [
+        int(m.group(1))
+        for f in directory.iterdir()
+        if f.is_file()
+        for m in [pattern.search(f.name)]
+        if m
+    ]
     return max(indices, default=-1)
 
 
-def list_checkpoints(directory: Path, prefix: str = "bc_policy",
-                     suffix: str = ".zip") -> List[Path]:
+def list_checkpoints(
+    directory: Path, prefix: str = "bc_policy", suffix: str = ".zip"
+) -> list[Path]:
     directory = Path(directory)
     if not directory.exists():
         return []
@@ -38,8 +43,9 @@ def list_checkpoints(directory: Path, prefix: str = "bc_policy",
     return [f for _, f in sorted(matches, key=lambda pair: pair[0], reverse=True)]
 
 
-def resolve_checkpoint(directory: Path, prefix: str = "bc_policy",
-                       suffix: str = ".zip") -> Optional[Path]:
+def resolve_checkpoint(
+    directory: Path, prefix: str = "bc_policy", suffix: str = ".zip"
+) -> Path | None:
     """Prefer the final ``<prefix>.zip``, else the highest numbered checkpoint."""
     directory = Path(directory)
     final = directory / f"{prefix}{suffix}"

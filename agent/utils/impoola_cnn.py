@@ -7,15 +7,15 @@ This makes the model highly invariant to spatial translations, extremely light
 (fewer parameters) and with excellent generalization ability.
 """
 
+import gymnasium as gym
 import torch as th
 import torch.nn as nn
-import gymnasium as gym
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 
 class ResidualBlock(nn.Module):
     """Standard residual block for the Impala/Impoola CNN."""
-    
+
     def __init__(self, channels: int):
         super().__init__()
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1)
@@ -33,7 +33,7 @@ class ResidualBlock(nn.Module):
 
 class ImpoolaBlock(nn.Module):
     """Main Impoola block: Conv2d -> MaxPool2d -> 2x ResidualBlocks."""
-    
+
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
@@ -54,29 +54,28 @@ class ImpoolaCNNExtractor(BaseFeaturesExtractor):
     Impoola-CNN extractor for Stable-Baselines3.
     Replaces the classic NatureCNN with a residual extractor using Global Average Pooling (GAP).
     """
-    
-    def __init__(self, 
-                 observation_space: gym.spaces.Box,
-                 features_dim: int = 512,
-                 channels_list = [32, 64, 128]):
+
+    def __init__(
+        self, observation_space: gym.spaces.Box, features_dim: int = 512, channels_list=None
+    ):
         super().__init__(observation_space, features_dim)
-        
+
         # The observation space has shape (n_frames, H, W)
         self.n_frames = observation_space.shape[0]
-        
+
         # Build the stack of Impoola blocks
         blocks = []
         in_ch = self.n_frames
         for out_ch in channels_list:
             blocks.append(ImpoolaBlock(in_ch, out_ch))
             in_ch = out_ch
-            
+
         self.features_net = nn.Sequential(*blocks)
-        
+
         # Global Average Pooling (GAP)
         self.gap = nn.AdaptiveAvgPool2d((1, 1))
         self.flatten = nn.Flatten()
-        
+
         # Linear projection to features_dim
         self.head = nn.Sequential(
             nn.Linear(channels_list[-1], features_dim),
@@ -88,7 +87,7 @@ class ImpoolaCNNExtractor(BaseFeaturesExtractor):
         x = observations.float()
         if x.max() > 1.0:
             x = x / 255.0
-            
+
         x = self.features_net(x)
         x = self.gap(x)
         x = self.flatten(x)

@@ -884,8 +884,9 @@ affected), or **fixed** (resolved in this revision, with the test that pins it).
 - Dead code and metrics removed: `SpatialAttention`, `bc/l2_loss` in the store.
 - CPU fallback is reachable (`--device` defaults to unset and is resolved at runtime).
 - Machine-specific emulator/ROM paths moved out of version control into `agent/config/local.py`.
-- A pytest suite (69 tests) and Linux CI exist, and the `Dockerfile` installs an interpreter. A
-  linter/formatter configuration still does not, and the Docker image has still never been built.
+- A pytest suite (69 tests) and Linux CI exist, and the `Dockerfile` installs an interpreter. Ruff is
+  configured for linting and formatting, and CI runs both gates. There is still no coverage threshold,
+  and the container image has still never been built.
 
 ### 12.4 The shortest path to a citable result
 

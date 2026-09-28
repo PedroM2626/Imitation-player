@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import torch as th
@@ -20,11 +20,12 @@ class PolicyRunner:
         if self.has_recurrence:
             self.extractor.reset_hidden()
 
-    def predict(self, observation: np.ndarray, deterministic: bool = False) -> Tuple[np.ndarray, Any]:
+    def predict(
+        self, observation: np.ndarray, deterministic: bool = False
+    ) -> tuple[np.ndarray, Any]:
         return self.policy.predict(observation, deterministic=deterministic)
 
-    def sharpened(self, observation: np.ndarray, multiplier: float,
-                  indices) -> np.ndarray:
+    def sharpened(self, observation: np.ndarray, multiplier: float, indices) -> np.ndarray:
         """Bernoulli-sample per-bit probabilities, boosting ``indices``.
 
         Used by the ``deploy.aggressiveness`` knob. Bypasses the policy's own

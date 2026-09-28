@@ -7,8 +7,9 @@ from agent.cli.record import TrajectoryRecorder
 
 
 def recorder_for(tmp_path, fake_env):
-    return TrajectoryRecorder(fake_env, tmp_path / "demos", max_trajectories=5,
-                              human=None, names=[])
+    return TrajectoryRecorder(
+        fake_env, tmp_path / "demos", max_trajectories=5, human=None, names=[]
+    )
 
 
 def test_k_stop_writes_one_file_per_segment(tmp_path, fake_env):

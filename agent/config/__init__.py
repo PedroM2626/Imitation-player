@@ -17,7 +17,7 @@ from __future__ import annotations
 import copy
 import importlib
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 DEFAULT_PROFILE = "hajime_ippo"
 _PROFILE_PACKAGE = "agent.config.profiles"
@@ -31,17 +31,20 @@ def available_profiles() -> list:
     from agent.config import profiles as _pkg
 
     directory = os.path.dirname(_pkg.__file__)
-    return sorted(name[:-3] for name in os.listdir(directory)
-                  if name.endswith(".py") and not name.startswith("_"))
+    return sorted(
+        name[:-3]
+        for name in os.listdir(directory)
+        if name.endswith(".py") and not name.startswith("_")
+    )
 
 
-def active_profile_name(explicit: Optional[str] = None) -> str:
+def active_profile_name(explicit: str | None = None) -> str:
     if explicit:
         return explicit
     return os.environ.get("IMITATION_PROFILE", DEFAULT_PROFILE)
 
 
-def _apply_local_overrides(game_config: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_local_overrides(game_config: dict[str, Any]) -> dict[str, Any]:
     try:
         local = importlib.import_module(_LOCAL_MODULE)
     except ImportError:
@@ -56,7 +59,7 @@ def _apply_local_overrides(game_config: Dict[str, Any]) -> Dict[str, Any]:
     return game_config
 
 
-def load_profile(name: Optional[str] = None) -> Dict[str, Any]:
+def load_profile(name: str | None = None) -> dict[str, Any]:
     """Return ``{"name", "GAME_CONFIG", "TRAINING_CONFIG"}`` for one game."""
     profile = active_profile_name(name)
     try:
@@ -77,11 +80,11 @@ def load_profile(name: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
-def game_config(name: Optional[str] = None) -> Dict[str, Any]:
+def game_config(name: str | None = None) -> dict[str, Any]:
     return load_profile(name)["GAME_CONFIG"]
 
 
-def num_actions(config: Dict[str, Any]) -> int:
+def num_actions(config: dict[str, Any]) -> int:
     actions = config.get("actions", {})
     declared = int(actions.get("num_actions", len(actions.get("mappings", []))))
     mappings = int(len(actions.get("mappings", [])))

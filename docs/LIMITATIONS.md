@@ -155,7 +155,7 @@ slices with `reset_hidden()` at boundaries — then re-measure that row.
 | B14 | Duplicate packages | **FIXED** | ten of eighteen modules byte-identical across two packages | collapsed into `agent/` with `config/profiles/`; one implementation of environment, emission, capture, training and deployment |
 | B15 | Misleading MLflow experiment names | **FIXED** | the generic package wrote to `Hajime_no_Ippo_Imitation_Learning`; the Impoola script wrote to `Model_Comparison` | names derive from `f"{profile}_{purpose}"` (`tracking.experiment_name`). Historical runs keep their old experiment names — that is what the store contains |
 | B16 | `bc/l2_loss` | **FIXED** | identically `0.0` in every retained log (`l2_weight` defaults to 0) | excluded from the store by `tracking.DEFAULT_SKIP_KEYS`; `bc/l2_norm` still logged |
-| B17 | No tests, no linter, no CI | **MITIGATED** | none existed | 69 pytest tests in `tests/` and `.github/workflows/ci.yml` running them on Linux with CPU torch, plus a compileall and a language check. **Still missing:** a linter/formatter configuration (ruff/black) and any coverage gate |
+| B17 | No tests, no linter, no CI | **FIXED** | none existed | 69 pytest tests in `tests/`; `.github/workflows/ci.yml` with a lint job (ruff check + `ruff format --check`) and a Linux test job on CPU torch including a one-epoch training step; `pyproject.toml` carries the ruff configuration and the codebase is formatted. **Still missing:** a coverage gate, and any test that needs a live game |
 | B18 | No licence | **FIXED** | unlicensed public repository | MIT `LICENSE` added, with third-party terms listed in README §18 |
 | B19 | CPU fallback unreachable | **FIXED** | `device = args.device or check_cuda()` never called `check_cuda()` because `--device` defaulted to `"cuda"` | `--device` defaults to unset and `common.resolve_device()` probes CUDA; covered by the CI training step running `--device cpu` |
 | B20 | `inputs==0.5` | **MITIGATED** | imported by nothing; dead weight in the frozen environment | excluded from `requirements-minimal.txt` and `requirements-docker.txt`; retained in `requirements.txt`, which is kept as the verbatim record of the publishing environment |
@@ -181,7 +181,7 @@ slices with `reset_hidden()` at boundaries — then re-measure that row.
 8. Close the recorder/deployer logging gap (B5).
 
 **P2 — engineering hygiene, independent of the research.**
-9. Add ruff/black configuration and a CI job; add a coverage floor (B17).
+9. Add a coverage floor to CI (ruff, the lint job and the test job now exist — B17).
 10. Build the Docker image once and record the result (B6).
 11. Recover or reimplement `Vision_Mamba`, then measure it or delete the claim (B8, L10).
 12. Populate `infos` / a sidecar manifest per demonstration (L7).

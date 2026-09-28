@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -23,9 +22,16 @@ def runs_root(tmp_path, monkeypatch):
     return tmp_path
 
 
-def make_demos(directory: Path, *, num_actions: int = 18, trajectories: int = 2,
-               frames: int = 40, seed: int = 0, p_fire: float = 0.3,
-               width_override: int | None = None) -> list:
+def make_demos(
+    directory: Path,
+    *,
+    num_actions: int = 18,
+    trajectories: int = 2,
+    frames: int = 40,
+    seed: int = 0,
+    p_fire: float = 0.3,
+    width_override: int | None = None,
+) -> list:
     """Write synthetic ``demo*.pt`` files and return their paths."""
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)

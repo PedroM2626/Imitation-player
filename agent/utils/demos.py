@@ -10,8 +10,8 @@ nothing recorded how many frames a run actually saw. The default policy is now
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 import torch as th
@@ -39,7 +39,7 @@ def load_demos(
     num_actions: int,
     policy: str = "strict",
     glob: str = DEMO_GLOB,
-) -> List[Trajectory]:
+) -> list[Trajectory]:
     """Read ``demo*.pt`` files into ``Trajectory`` objects.
 
     ``policy``: ``strict`` raises if a file's action width differs from
@@ -56,7 +56,7 @@ def load_demos(
             f"(python -m agent.cli.record --profile <name>)."
         )
 
-    trajectories: List[Trajectory] = []
+    trajectories: list[Trajectory] = []
     failures = []
     for path in files:
         try:
@@ -73,21 +73,25 @@ def load_demos(
                 obs = np.squeeze(obs, axis=1)
 
             if acts.shape[-1] != num_actions:
-                message = (f"{path.name}: actions have width {acts.shape[-1]} but the profile "
-                           f"declares num_actions={num_actions}")
+                message = (
+                    f"{path.name}: actions have width {acts.shape[-1]} but the profile "
+                    f"declares num_actions={num_actions}"
+                )
                 if policy == "strict":
-                    raise DemoError(message + ". Re-record, choose the right profile, or set "
-                                              "actions.width_policy='coerce' to accept truncation.")
+                    raise DemoError(
+                        message + ". Re-record, choose the right profile, or set "
+                        "actions.width_policy='coerce' to accept truncation."
+                    )
                 print(f"[demo] WARNING coercing width: {message}")
                 acts = _reconcile_width(acts, num_actions)
 
-            trajectories.append(Trajectory(obs=obs, acts=acts.astype(np.float32),
-                                           infos=None, terminal=False))
+            trajectories.append(
+                Trajectory(obs=obs, acts=acts.astype(np.float32), infos=None, terminal=False)
+            )
 
     if failures:
         raise DemoError(
-            f"{len(failures)} demonstration file(s) could not be read:\n  "
-            + "\n  ".join(failures)
+            f"{len(failures)} demonstration file(s) could not be read:\n  " + "\n  ".join(failures)
         )
     if not trajectories:
         raise DemoError(f"no usable trajectories found in {directory}")
@@ -95,7 +99,7 @@ def load_demos(
     return trajectories
 
 
-def summarise(trajectories: Sequence[Trajectory], num_actions: int) -> Dict[str, object]:
+def summarise(trajectories: Sequence[Trajectory], num_actions: int) -> dict[str, object]:
     """Corpus statistics, including the trivial-predictor baseline."""
     acts = np.concatenate([np.asarray(t.acts).reshape(-1, num_actions) for t in trajectories])
     marginals = acts.mean(axis=0)
@@ -125,16 +129,22 @@ def summarise(trajectories: Sequence[Trajectory], num_actions: int) -> Dict[str,
     }
 
 
-def print_summary(stats: Dict[str, object], names: Optional[Sequence[str]] = None) -> None:
-    print(f"\nCorpus: {stats['trajectories']} trajectories, {stats['frames']} frames, "
-          f"{stats['num_actions']} action bits")
-    print(f"  distinct joint actions : {stats['distinct_joint_actions']} "
-          f"(of {2 ** int(stats['num_actions'])} possible)")
+def print_summary(stats: dict[str, object], names: Sequence[str] | None = None) -> None:
+    print(
+        f"\nCorpus: {stats['trajectories']} trajectories, {stats['frames']} frames, "
+        f"{stats['num_actions']} action bits"
+    )
+    print(
+        f"  distinct joint actions : {stats['distinct_joint_actions']} "
+        f"(of {2 ** int(stats['num_actions'])} possible)"
+    )
     print(f"  modal action share     : {stats['modal_action_share']:.4f}")
     print(f"  top-5 action share     : {stats['top5_action_share']:.4f}")
     print(f"  all-zero action share  : {stats['zero_action_share']:.4f}")
-    print(f"  marginal baseline NLL  : {stats['marginal_baseline_nats']:.4f} nats "
-          f"(uniform would be {stats['uniform_baseline_nats']:.4f})")
+    print(
+        f"  marginal baseline NLL  : {stats['marginal_baseline_nats']:.4f} nats "
+        f"(uniform would be {stats['uniform_baseline_nats']:.4f})"
+    )
     print("  per-bit firing rate:")
     marginals = stats["marginals"]  # type: ignore[assignment]
     for i, value in enumerate(marginals):  # type: ignore[union-attr]
@@ -142,5 +152,7 @@ def print_summary(stats: Dict[str, object], names: Optional[Sequence[str]] = Non
         print(f"    [{i:>2}] {label:<16} {value:.4f}")
     dead = [i for i, value in enumerate(marginals) if value == 0]  # type: ignore[union-attr]
     if dead:
-        print(f"  NOTE: bits {dead} never fire in this corpus; their contribution to "
-              f"the loss is identically zero.")
+        print(
+            f"  NOTE: bits {dead} never fire in this corpus; their contribution to "
+            f"the loss is identically zero."
+        )

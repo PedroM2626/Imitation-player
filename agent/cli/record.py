@@ -14,13 +14,20 @@ from __future__ import annotations
 import argparse
 import time
 from pathlib import Path
-from typing import List
 
 import numpy as np
 import torch as th
 from imitation.data.types import Trajectory
 
-from agent.cli.common import action_names, add_common, build_config, cli_entry, header, load, wrapped_env
+from agent.cli.common import (
+    action_names,
+    add_common,
+    build_config,
+    cli_entry,
+    header,
+    load,
+    wrapped_env,
+)
 from agent.utils import paths
 from agent.utils.input_map import HumanInput
 
@@ -28,8 +35,14 @@ from agent.utils.input_map import HumanInput
 class TrajectoryRecorder:
     """Buffers (observation, action) pairs and writes them out per stop."""
 
-    def __init__(self, env, demo_dir: Path, max_trajectories: int = 10,
-                 human: HumanInput = None, names: List[str] = None):
+    def __init__(
+        self,
+        env,
+        demo_dir: Path,
+        max_trajectories: int = 10,
+        human: HumanInput = None,
+        names: list[str] = None,
+    ):
         self.env = env
         self.demo_dir = Path(demo_dir)
         self.demo_dir.mkdir(parents=True, exist_ok=True)
@@ -38,10 +51,10 @@ class TrajectoryRecorder:
         self.names = names or []
 
         self.is_recording = False
-        self.recorded_obs: List[np.ndarray] = []
-        self.recorded_actions: List[np.ndarray] = []
+        self.recorded_obs: list[np.ndarray] = []
+        self.recorded_actions: list[np.ndarray] = []
         self.count_record = 0
-        self.saved_files: List[Path] = []
+        self.saved_files: list[Path] = []
 
     def start(self) -> None:
         obs = self.env.reset()
@@ -95,11 +108,16 @@ class TrajectoryRecorder:
 
 @cli_entry
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     add_common(parser)
-    parser.add_argument("--max-trajectories", type=int, default=None,
-                        help="stop after this many saved files (default: profile's recording.max_trajectories)")
+    parser.add_argument(
+        "--max-trajectories",
+        type=int,
+        default=None,
+        help="stop after this many saved files (default: profile's recording.max_trajectories)",
+    )
     args = parser.parse_args(argv)
 
     profile = load(args.profile, args.runs_root)
@@ -116,9 +134,12 @@ def main(argv=None) -> int:
     env = wrapped_env(build_config(config, dummy=False))
     human = HumanInput(config)
     recorder = TrajectoryRecorder(
-        env, demo_dir,
-        max_trajectories=args.max_trajectories or config.get("recording", {}).get("max_trajectories", 10),
-        human=human, names=action_names(profile),
+        env,
+        demo_dir,
+        max_trajectories=args.max_trajectories
+        or config.get("recording", {}).get("max_trajectories", 10),
+        human=human,
+        names=action_names(profile),
     )
 
     try:
@@ -171,15 +192,18 @@ def main(argv=None) -> int:
 
             screen.fill((0, 0, 0))
             small = pygame.transform.scale(
-                pygame.surfarray.make_surface(np.asarray(frame, dtype=np.uint8).T), (256, 256))
+                pygame.surfarray.make_surface(np.asarray(frame, dtype=np.uint8).T), (256, 256)
+            )
             screen.blit(small, (22, 10))
             status = "RECORDING" if recorder.is_recording else "IDLE"
-            for i, line in enumerate([
-                f"{status}   fps: {fps_avg:.0f}",
-                f"Demos: {recorder.count_record}/{recorder.max_trajectories}",
-                "[K] toggle record   [ESC] save & exit",
-                f"action bits on: {np.flatnonzero(action).tolist()}",
-            ]):
+            for i, line in enumerate(
+                [
+                    f"{status}   fps: {fps_avg:.0f}",
+                    f"Demos: {recorder.count_record}/{recorder.max_trajectories}",
+                    "[K] toggle record   [ESC] save & exit",
+                    f"action bits on: {np.flatnonzero(action).tolist()}",
+                ]
+            ):
                 screen.blit(font.render(line, True, (255, 255, 255)), (10, 276 + i * 16))
             pygame.display.flip()
 
@@ -193,7 +217,9 @@ def main(argv=None) -> int:
         recorder.finish()
         pygame.quit()
         env.close()
-        print(f"\nExited ({exit_reason}). {len(recorder.saved_files)} file(s) written to {demo_dir}")
+        print(
+            f"\nExited ({exit_reason}). {len(recorder.saved_files)} file(s) written to {demo_dir}"
+        )
         for p in recorder.saved_files:
             print("   ", p.name)
 

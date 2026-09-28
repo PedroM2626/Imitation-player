@@ -17,7 +17,6 @@ CNN+LSTM row of the benchmark.
 from __future__ import annotations
 
 from collections import deque
-from typing import Optional
 
 import gymnasium as gym
 import torch as th
@@ -151,7 +150,7 @@ class TemporalAttentionLSTM(BaseFeaturesExtractor):
 
         return self.linear(context)
 
-    def reset_hidden(self, dones: Optional[th.Tensor] = None) -> None:
+    def reset_hidden(self, dones: th.Tensor | None = None) -> None:
         """Clear the recurrent state. Call this at episode boundaries."""
         self.hidden_state = None
         self.hidden_reset = True

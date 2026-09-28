@@ -1,7 +1,7 @@
 """The dummy environment is importable and usable without a window or a pad."""
 
-import numpy as np
 import gymnasium as gym
+import numpy as np
 import pytest
 
 from agent.cli.common import build_config, wrapped_env
@@ -63,7 +63,10 @@ def test_window_timeout_raises_rather_than_degrading(monkeypatch, dummy_config):
     env = ge.GenericGameEnv.__new__(ge.GenericGameEnv)
     with pytest.raises((ge.WindowNotFoundError, Exception)) as excinfo:
         ge.GenericGameEnv.__init__(env, config)
-    assert excinfo.typename in ("WindowNotFoundError", "RuntimeError") or "window" in str(excinfo.value).lower()
+    assert (
+        excinfo.typename in ("WindowNotFoundError", "RuntimeError")
+        or "window" in str(excinfo.value).lower()
+    )
 
 
 def test_windows_flags_are_booleans():

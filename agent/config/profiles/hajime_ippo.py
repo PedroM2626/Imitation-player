@@ -44,8 +44,8 @@ GAME_CONFIG = {
             {"name": "DOWN", "kind": "axis", "stick": "left", "axis": "y", "value": 1.0},
             {"name": "LEFT", "kind": "axis", "stick": "left", "axis": "x", "value": -1.0},
             {"name": "RIGHT", "kind": "axis", "stick": "left", "axis": "x", "value": 1.0},
-            {"name": "CROSS", "kind": "button", "button": "B"},      # PlayStation Cross = Xbox B
-            {"name": "CIRCLE", "kind": "button", "button": "A"},     # PlayStation Circle = Xbox A
+            {"name": "CROSS", "kind": "button", "button": "B"},  # PlayStation Cross = Xbox B
+            {"name": "CIRCLE", "kind": "button", "button": "A"},  # PlayStation Circle = Xbox A
             {"name": "SQUARE", "kind": "button", "button": "X"},
             {"name": "L2", "kind": "trigger", "trigger": "left", "value": 255},
             {"name": "R2", "kind": "trigger", "trigger": "right", "value": 255},

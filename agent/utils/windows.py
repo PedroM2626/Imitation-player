@@ -23,24 +23,28 @@ HAS_WIN32 = HAS_DXCAM = HAS_VGAMEPAD = HAS_MSS = False
 
 if IS_WINDOWS:
     try:
-        import win32gui  # type: ignore
-        import win32process  # type: ignore
+        import win32gui  # type: ignore  # noqa: F401 - re-exported
+        import win32process  # type: ignore  # noqa: F401 - re-exported
+
         HAS_WIN32 = True
     except ImportError:
         pass
     try:
-        import dxcam  # type: ignore
+        import dxcam  # type: ignore  # noqa: F401 - re-exported
+
         HAS_DXCAM = True
     except (ImportError, OSError):
         pass
     try:
-        import vgamepad as vg  # type: ignore
+        import vgamepad as vg  # type: ignore  # noqa: F401 - re-exported
+
         HAS_VGAMEPAD = True
     except (ImportError, OSError, Exception):  # noqa: BLE001 - VBus raises bare Exception
         HAS_VGAMEPAD = False
 
 try:
-    import mss  # type: ignore
+    import mss  # type: ignore  # noqa: F401 - re-exported
+
     HAS_MSS = True
 except (ImportError, Exception):  # noqa: BLE001
     HAS_MSS = False
@@ -53,4 +57,6 @@ def require_desktop_access(feature: str) -> None:
             f"{feature} needs Windows; run training with a dummy environment instead "
             f"(see agent.utils.game_env, config['dummy']=True)."
         )
-    raise RuntimeError(f"{feature} is unavailable: the required package or driver is not installed.")
+    raise RuntimeError(
+        f"{feature} is unavailable: the required package or driver is not installed."
+    )

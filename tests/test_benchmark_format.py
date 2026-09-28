@@ -4,8 +4,14 @@ from agent.cli import benchmark as b
 
 
 def measurement(loss=None, time_=None, size=None, params=None, n=1):
-    return {"final_loss": loss, "training_time": time_, "model_size_mb": size,
-            "num_params": params, "n_runs": n, "loss_sd": 0.0}
+    return {
+        "final_loss": loss,
+        "training_time": time_,
+        "model_size_mb": size,
+        "num_params": params,
+        "n_runs": n,
+        "loss_sd": 0.0,
+    }
 
 
 MEASURED = {
@@ -33,17 +39,17 @@ def test_best_and_worst_are_annotated():
 
 def test_margin_row_is_relative_to_the_baseline():
     table = b.build_table(MEASURED, b.COLUMN_ORDER, BASELINE)
-    row = [l for l in table.splitlines() if "Margin over" in l][0]
-    assert "+0.87" in row   # 3.4763 - 2.6066
+    row = next(line for line in table.splitlines() if "Margin over" in line)
+    assert "+0.87" in row  # 3.4763 - 2.6066
 
 
 def test_unmeasured_architectures_render_as_empty_not_invented():
     partial = dict(MEASURED)
     partial["resnet18"] = measurement(n=0)
     table = b.build_table(partial, b.COLUMN_ORDER, BASELINE)
-    row = [l for l in table.splitlines() if "Final training loss" in l][0]
+    row = next(line for line in table.splitlines() if "Final training loss" in line)
     assert row.rstrip("| ").endswith("`-`")
-    runs_row = [l for l in table.splitlines() if "Runs available" in l][0]
+    runs_row = next(line for line in table.splitlines() if "Runs available" in line)
     assert runs_row.rstrip("| ").endswith("0")
 
 
@@ -70,7 +76,8 @@ def test_conclusion_is_empty_when_nothing_was_measured():
 def test_regenerate_readme_preserves_everything_outside_the_markers(tmp_path):
     original = (
         "# Doc\n\nprologue\n\n<!-- BENCHMARK_START -->\nold table\n<!-- BENCHMARK_END -->\n\n"
-        "epilogue\n\n**Conclusion**: stale sentence that is one line\n\ntrailing section\n")
+        "epilogue\n\n**Conclusion**: stale sentence that is one line\n\ntrailing section\n"
+    )
     readme = tmp_path / "README.md"
     readme.write_text(original, encoding="utf-8")
 
@@ -86,7 +93,9 @@ def test_regenerate_readme_preserves_everything_outside_the_markers(tmp_path):
 
 def test_regenerate_readme_never_blanks_the_conclusion(tmp_path):
     readme = tmp_path / "README.md"
-    readme.write_text("<!-- BENCHMARK_START -->\nx\n<!-- BENCHMARK_END -->\n"
-                      "**Conclusion**: keep me\n", encoding="utf-8")
+    readme.write_text(
+        "<!-- BENCHMARK_START -->\nx\n<!-- BENCHMARK_END -->\n**Conclusion**: keep me\n",
+        encoding="utf-8",
+    )
     b.regenerate_readme("| y |", "", readme)
     assert "keep me" in readme.read_text(encoding="utf-8")

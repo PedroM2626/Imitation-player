@@ -12,11 +12,18 @@ from __future__ import annotations
 
 import argparse
 import time
-from typing import Optional
 
 import numpy as np
 
-from agent.cli.common import add_common, build_config, cli_entry, header, load, num_actions, wrapped_env
+from agent.cli.common import (
+    add_common,
+    build_config,
+    cli_entry,
+    header,
+    load,
+    num_actions,
+    wrapped_env,
+)
 from agent.utils import paths
 from agent.utils.architectures import ARCHITECTURES, get
 from agent.utils.checkpoints import resolve_checkpoint
@@ -35,13 +42,16 @@ def choose_checkpoint(models_dir, prefix: str):
 
 @cli_entry
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     add_common(parser, training=True)
     parser.add_argument("--arch", default="naturecnn", choices=sorted(ARCHITECTURES))
     parser.add_argument("--model", default=None, help="explicit checkpoint path")
     parser.add_argument("--max-steps", type=int, default=None)
-    parser.add_argument("--start-manual", action="store_true", help="begin with the human in control")
+    parser.add_argument(
+        "--start-manual", action="store_true", help="begin with the human in control"
+    )
     args = parser.parse_args(argv)
 
     profile = load(args.profile, args.runs_root)
@@ -58,8 +68,10 @@ def main(argv=None) -> int:
     header("DEPLOYING POLICY")
     print(f"checkpoint    : {checkpoint}")
     print(f"profile       : {profile['name']}  (input mode {config['actions'].get('input_mode')})")
-    print(f"inference cap : {fps:.0f} fps"
-          + (f"  aggressiveness={aggressiveness}" if aggressiveness != 1.0 else "  (no sharpening)"))
+    print(
+        f"inference cap : {fps:.0f} fps"
+        + (f"  aggressiveness={aggressiveness}" if aggressiveness != 1.0 else "  (no sharpening)")
+    )
 
     env = wrapped_env(build_config(config, dummy=False))
     device = "cuda" if args.device == "cuda" else ("cuda" if _cuda_ok() else "cpu")
@@ -72,9 +84,13 @@ def main(argv=None) -> int:
         return 1
 
     from agent.utils.input_map import HumanInput
+
     human = HumanInput(config)
-    attack_bits = [i for i, m in enumerate(config["actions"]["mappings"])
-                   if m.get("name") in deploy_cfg.get("attack_buttons", ())]
+    attack_bits = [
+        i
+        for i, m in enumerate(config["actions"]["mappings"])
+        if m.get("name") in deploy_cfg.get("attack_buttons", ())
+    ]
 
     ai_active = not args.start_manual
     obs = env.reset()
@@ -100,7 +116,9 @@ def main(argv=None) -> int:
                 action = np.zeros((1, n_act), dtype=np.float32)
                 action[0] = human.read()
 
-            obs, _, _, _ = env.step(action if np.ndim(action) == 2 else [np.asarray(action).reshape(-1)[:n_act]])
+            obs, _, _, _ = env.step(
+                action if np.ndim(action) == 2 else [np.asarray(action).reshape(-1)[:n_act]]
+            )
             steps += 1
 
             remaining = budget - (time.perf_counter() - loop_start)
@@ -119,6 +137,7 @@ _TOGGLED_LAST = {"k": 0.0}
 
 def _toggled(key: str, debounce: float = 0.3) -> bool:
     import keyboard
+
     if not keyboard.is_pressed(key):
         return False
     now = time.time()
@@ -130,6 +149,7 @@ def _toggled(key: str, debounce: float = 0.3) -> bool:
 
 def _cuda_ok() -> bool:
     import torch
+
     return torch.cuda.is_available()
 
 

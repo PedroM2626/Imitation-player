@@ -25,7 +25,8 @@ def test_no_machine_specific_paths_are_committed(profile):
     for key in ("exe_path", "rom_path"):
         value = cfg.get(key)
         assert value is None or not value.endswith((".exe", ".iso")), (
-            f"{profile}.{key} hard-codes a workstation path; move it to agent/config/local.py")
+            f"{profile}.{key} hard-codes a workstation path; move it to agent/config/local.py"
+        )
 
 
 @pytest.mark.parametrize("profile", available_profiles())
@@ -45,8 +46,7 @@ def test_local_overrides_are_applied(monkeypatch, tmp_path):
     import agent.config as config_module
 
     monkeypatch.setattr(config_module, "_LOCAL_KEYS", ("exe_path",))
-    merged = config_module._apply_local_overrides(
-        {"profile": "hajime_ippo", "exe_path": None})
+    merged = config_module._apply_local_overrides({"profile": "hajime_ippo", "exe_path": None})
     assert merged["exe_path"] is None or isinstance(merged["exe_path"], str)
 
 

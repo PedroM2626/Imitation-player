@@ -42,7 +42,8 @@ class FakeGamepad:
 def make_vg():
     """A vgamepad-shaped stub exposing XUSB_BUTTON constants and a pad factory."""
     buttons = types.SimpleNamespace(
-        XUSB_GAMEPAD_A=1, XUSB_GAMEPAD_B=2, XUSB_GAMEPAD_X=4, XUSB_GAMEPAD_L3=8)
+        XUSB_GAMEPAD_A=1, XUSB_GAMEPAD_B=2, XUSB_GAMEPAD_X=4, XUSB_GAMEPAD_L3=8
+    )
 
     def factory():
         return FakeGamepad()
@@ -133,8 +134,12 @@ class FakePyDirect:
 def test_keyboard_mouse_release_all(monkeypatch):
     stub = FakePyDirect()
     monkeypatch.setitem(__import__("sys").modules, "pydirectinput", stub)
-    e = KeyboardMouseEmitter([{"name": "FWD", "kind": "key", "key": "w"},
-                              {"name": "ATK", "kind": "mouse_button", "button": "left"}])
+    e = KeyboardMouseEmitter(
+        [
+            {"name": "FWD", "kind": "key", "key": "w"},
+            {"name": "ATK", "kind": "mouse_button", "button": "left"},
+        ]
+    )
     e.apply(np.array([1, 1], dtype=np.float32))
     e.release_all()
     assert stub.events.count(("up", "w")) == 1

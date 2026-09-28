@@ -9,7 +9,8 @@ which is validated against the model's action space at construction.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
@@ -32,7 +33,7 @@ XBOX_BUTTONS = {
 }
 
 
-def validate_mappings(mappings: Sequence[Dict[str, Any]], num_actions: int) -> None:
+def validate_mappings(mappings: Sequence[dict[str, Any]], num_actions: int) -> None:
     """Fail early if the table and the declared action width disagree."""
     if len(mappings) != num_actions:
         raise ValueError(
@@ -43,7 +44,9 @@ def validate_mappings(mappings: Sequence[Dict[str, Any]], num_actions: int) -> N
         kind = m.get("kind")
         if kind == "button" and m.get("button") not in XBOX_BUTTONS and m.get("key") is None:
             raise ValueError(f"mapping[{i}] {m.get('name')!r}: unknown button {m.get('button')!r}")
-        if kind == "axis" and (m.get("stick") not in ("left", "right") or m.get("axis") not in ("x", "y")):
+        if kind == "axis" and (
+            m.get("stick") not in ("left", "right") or m.get("axis") not in ("x", "y")
+        ):
             raise ValueError(f"mapping[{i}] {m.get('name')!r}: axis needs stick and x|y")
         if kind == "trigger" and m.get("trigger") not in ("left", "right"):
             raise ValueError(f"mapping[{i}] {m.get('name')!r}: trigger needs left|right")
@@ -54,15 +57,23 @@ def validate_mappings(mappings: Sequence[Dict[str, Any]], num_actions: int) -> N
 class GamepadEmitter:
     """Drives a virtual Xbox 360 pad from the profile's mapping table."""
 
-    def __init__(self, mappings: List[Dict[str, Any]], vg_module) -> None:
+    def __init__(self, mappings: list[dict[str, Any]], vg_module) -> None:
         validate_mappings(mappings, len(mappings))
         self.mappings = mappings
-        self._buttons = {m["button"]: getattr(vg_module.XUSB_BUTTON, XBOX_BUTTONS[m["button"]])
-                         for m in mappings if m.get("kind") == "button"}
+        self._buttons = {
+            m["button"]: getattr(vg_module.XUSB_BUTTON, XBOX_BUTTONS[m["button"]])
+            for m in mappings
+            if m.get("kind") == "button"
+        }
         self.gamepad = vg_module.VX360Gamepad()
         self._held: set = set()
-        self._axes: Dict[str, float] = {"left_x": 0.0, "left_y": 0.0, "right_x": 0.0, "right_y": 0.0}
-        self._triggers: Dict[str, int] = {"left": 0, "right": 0}
+        self._axes: dict[str, float] = {
+            "left_x": 0.0,
+            "left_y": 0.0,
+            "right_x": 0.0,
+            "right_y": 0.0,
+        }
+        self._triggers: dict[str, int] = {"left": 0, "right": 0}
 
     def _resolve(self, active: np.ndarray) -> None:
         pressed = set()
@@ -96,10 +107,12 @@ class GamepadEmitter:
         self._held = self._pressed
 
         self._axes = self._axes_next
-        self.gamepad.left_joystick_float(x_value_float=self._axes["left_x"],
-                                         y_value_float=self._axes["left_y"])
-        self.gamepad.right_joystick_float(x_value_float=self._axes["right_x"],
-                                          y_value_float=self._axes["right_y"])
+        self.gamepad.left_joystick_float(
+            x_value_float=self._axes["left_x"], y_value_float=self._axes["left_y"]
+        )
+        self.gamepad.right_joystick_float(
+            x_value_float=self._axes["right_x"], y_value_float=self._axes["right_y"]
+        )
 
         for side in ("left", "right"):
             value = self._triggers_next[side]
@@ -121,7 +134,7 @@ class GamepadEmitter:
 class KeyboardMouseEmitter:
     """Synthesises key and mouse events through pydirectinput."""
 
-    def __init__(self, mappings: List[Dict[str, Any]]) -> None:
+    def __init__(self, mappings: list[dict[str, Any]]) -> None:
         validate_mappings(mappings, len(mappings))
         import pydirectinput
 
@@ -138,7 +151,7 @@ class KeyboardMouseEmitter:
             self._press(self.mappings[i], False)
         self._held = current
 
-    def _press(self, m: Dict[str, Any], down: bool) -> None:
+    def _press(self, m: dict[str, Any], down: bool) -> None:
         if m["kind"] == "key":
             getattr(self._p, "keyDown" if down else "keyUp")(m["key"])
         elif m["kind"] == "mouse_button":
@@ -153,7 +166,7 @@ class KeyboardMouseEmitter:
         self.release_all()
 
 
-def build_emitter(config: Dict[str, Any], vg_module):
+def build_emitter(config: dict[str, Any], vg_module):
     actions = config["actions"]
     mappings, mode = actions["mappings"], actions.get("input_mode", "gamepad")
     validate_mappings(mappings, int(actions["num_actions"]))

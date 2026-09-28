@@ -1,0 +1,21 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = ["venv", ".venv", "runs", "__pycache__"]
+
+[tool.ruff.lint]
+# Errors, pyflakes, isort-ordering-adjacent rules, and the bug-prone subsets.
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RET"]
+ignore = [
+    "E501",     # line length is enforced by the formatter, not the linter
+    "B008",     # argparse defaults call functions by design
+    "SIM105",   # suppress(Exception) vs try/except/pass
+    "RET504",   # unnecessary assignment before return
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]      # assert False is idiomatic in the recorder tests
+"agent/cli/common.py" = ["E402"]   # sys.path must be patched before agent imports
+
+[tool.ruff.format]
+quote-style = "double"

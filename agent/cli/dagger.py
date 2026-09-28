@@ -22,8 +22,16 @@ from pathlib import Path
 
 import numpy as np
 
-from agent.cli.common import (add_common, build_config, cli_entry, header, load, num_actions,
-                              resolve_device, wrapped_env)
+from agent.cli.common import (
+    add_common,
+    build_config,
+    cli_entry,
+    header,
+    load,
+    num_actions,
+    resolve_device,
+    wrapped_env,
+)
 from agent.cli.deploy import choose_checkpoint
 from agent.utils import demos as demos_mod
 from agent.utils import paths
@@ -32,8 +40,9 @@ from agent.utils.input_map import HumanInput
 from agent.utils.utils import PolicyRunner, load_policy
 
 
-def collect_round(env, runner, human, demo_dir: Path, profile_name: str,
-                  seconds: float, num_actions: int) -> int:
+def collect_round(
+    env, runner, human, demo_dir: Path, profile_name: str, seconds: float, num_actions: int
+) -> int:
     """Let the agent play, hand over on ``L``, and record what the human does."""
     import keyboard
     import pygame
@@ -76,8 +85,9 @@ def collect_round(env, runner, human, demo_dir: Path, profile_name: str,
             screen.fill((0, 0, 0))
             state = "HUMAN (recording)" if human_active else "AI"
             left = seconds - (time.time() - started)
-            for i, line in enumerate([f"{state}   {left:4.1f}s left",
-                                      "[L] take over   [ESC] stop"]):
+            for i, line in enumerate(
+                [f"{state}   {left:4.1f}s left", "[L] take over   [ESC] stop"]
+            ):
                 screen.blit(font.render(line, True, (255, 255, 255)), (8, 6 + i * 20))
             pygame.display.flip()
     finally:
@@ -89,8 +99,8 @@ def collect_round(env, runner, human, demo_dir: Path, profile_name: str,
 
 
 def _flush(buffer_obs, buffer_acts, demo_dir: Path, profile_name: str) -> int:
-    from imitation.data.types import Trajectory
     import torch as th
+    from imitation.data.types import Trajectory
 
     obs = np.stack(buffer_obs).astype(np.uint8)
     acts = np.asarray(buffer_acts, dtype=np.float32)
@@ -106,12 +116,17 @@ def _flush(buffer_obs, buffer_acts, demo_dir: Path, profile_name: str) -> int:
 
 @cli_entry
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     add_common(parser, training=True)
     parser.add_argument("--arch", default="naturecnn", choices=sorted(ARCHITECTURES))
-    parser.add_argument("--rounds", type=int, default=None,
-                        help="collect-then-retrain iterations (default: TRAINING_CONFIG.dagger_iterations)")
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=None,
+        help="collect-then-retrain iterations (default: TRAINING_CONFIG.dagger_iterations)",
+    )
     parser.add_argument("--seconds", type=float, default=120.0, help="collection time per round")
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch", type=int, default=None)
@@ -122,7 +137,9 @@ def main(argv=None) -> int:
     profile = load(args.profile, args.runs_root)
     config = profile["GAME_CONFIG"]
     training_config = profile["TRAINING_CONFIG"]
-    rounds = args.rounds if args.rounds is not None else int(training_config.get("dagger_iterations", 3))
+    rounds = (
+        args.rounds if args.rounds is not None else int(training_config.get("dagger_iterations", 3))
+    )
     n_act = num_actions(config)
     demo_dir = paths.demos_dir(profile["name"])
 
@@ -134,26 +151,34 @@ def main(argv=None) -> int:
     total_saved = 0
     for round_index in range(rounds):
         print(f"\n--- round {round_index + 1}/{rounds} ---")
-        checkpoint = choose_checkpoint(paths.models_dir(profile["name"]),
-                                       "bc_policy" if args.arch == "naturecnn" else get(args.arch).checkpoint_prefix)
+        checkpoint = choose_checkpoint(
+            paths.models_dir(profile["name"]),
+            "bc_policy" if args.arch == "naturecnn" else get(args.arch).checkpoint_prefix,
+        )
         env = wrapped_env(build_config(config, dummy=False))
         runner = PolicyRunner(load_policy(checkpoint, device=device))
         human = HumanInput(config)
-        total_saved += collect_round(env, runner, human, demo_dir, profile["name"],
-                                     args.seconds, n_act)
+        total_saved += collect_round(
+            env, runner, human, demo_dir, profile["name"], args.seconds, n_act
+        )
 
         if args.collect_only:
             break
 
         from agent.cli import train as train_cli
+
         train_args = ["--profile", profile["name"], "--arch", args.arch, "--device", device]
         for flag, value in (("--epochs", args.epochs), ("--batch", args.batch), ("--lr", args.lr)):
             if value is not None:
                 train_args += [flag, str(value)]
         stats = demos_mod.summarise(
-            demos_mod.load_demos(demo_dir, n_act, config["actions"].get("width_policy", "strict")), n_act)
-        print(f"[dagger] aggregated corpus is now {stats['frames']} frames "
-              f"(baseline {stats['marginal_baseline_nats']:.4f} nats); retraining...")
+            demos_mod.load_demos(demo_dir, n_act, config["actions"].get("width_policy", "strict")),
+            n_act,
+        )
+        print(
+            f"[dagger] aggregated corpus is now {stats['frames']} frames "
+            f"(baseline {stats['marginal_baseline_nats']:.4f} nats); retraining..."
+        )
         train_cli.main(train_args)
 
     print(f"\n[OK] {total_saved} correction file(s) written to {demo_dir}")

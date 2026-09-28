@@ -18,8 +18,7 @@ from __future__ import annotations
 
 import subprocess
 import time
-from collections import deque
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 import cv2
 import gymnasium as gym
@@ -38,10 +37,11 @@ class GenericGameEnv(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"]}
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+    def __init__(self, config: dict[str, Any] | None = None) -> None:
         super().__init__()
         if config is None:
             from agent.config import game_config
+
             config = game_config()
 
         self.config = config
@@ -63,14 +63,15 @@ class GenericGameEnv(gym.Env):
 
         self.action_space = gym.spaces.MultiBinary(self.num_actions)
         self.observation_space = gym.spaces.Box(
-            low=0, high=255,
+            low=0,
+            high=255,
             shape=(self.internal_height, self.internal_width, 1),
             dtype=np.uint8,
         )
 
         self.dummy = bool(config.get("dummy", False))
-        self.hwnd: Optional[int] = None
-        self.img: Optional[np.ndarray] = None
+        self.hwnd: int | None = None
+        self.img: np.ndarray | None = None
         self.emitter = None
         self.camera = None
         self.mss_sct = None
@@ -100,12 +101,12 @@ class GenericGameEnv(gym.Env):
 
     # ---------------- observation ----------------
 
-    def _default_region(self) -> Tuple[int, int, int, int]:
+    def _default_region(self) -> tuple[int, int, int, int]:
         left = int(self.window_offset.get("left", 0))
         top = int(self.window_offset.get("top", 0))
         return (left, top, left + self.internal_width, top + self.internal_height)
 
-    def _window_region(self) -> Tuple[int, int, int, int]:
+    def _window_region(self) -> tuple[int, int, int, int]:
         left, top, right, bottom = windows.win32gui.GetWindowRect(self.hwnd)
         return (
             left + int(self.window_offset.get("left", 0)),
@@ -119,13 +120,16 @@ class GenericGameEnv(gym.Env):
         self.region = self._window_region()
         if windows.HAS_DXCAM:
             try:
-                self.camera = windows.dxcam.create(output_color="GRAY",
-                                                   max_buffer_len=self.buffer_len)
+                self.camera = windows.dxcam.create(
+                    output_color="GRAY", max_buffer_len=self.buffer_len
+                )
                 self.camera.start(region=self.region, target_fps=self.target_fps)
                 return
             except Exception as exc:  # noqa: BLE001
-                print(f"[capture] DXCam unavailable ({exc.__class__.__name__}: {exc}); "
-                      f"falling back to mss. This is typical on dual-GPU laptops.")
+                print(
+                    f"[capture] DXCam unavailable ({exc.__class__.__name__}: {exc}); "
+                    f"falling back to mss. This is typical on dual-GPU laptops."
+                )
         if not windows.HAS_MSS:
             raise RuntimeError(
                 "No screen-capture backend is available: install dxcam or mss. "
@@ -133,7 +137,7 @@ class GenericGameEnv(gym.Env):
             )
         self.mss_sct = windows.mss.mss()
 
-    def _grab(self) -> Optional[np.ndarray]:
+    def _grab(self) -> np.ndarray | None:
         if self.camera is not None:
             return self.camera.get_latest_frame()
         if self.mss_sct is not None:
@@ -160,8 +164,9 @@ class GenericGameEnv(gym.Env):
                 return self.img
             return np.zeros(self.observation_space.shape, dtype=np.uint8)
 
-        resized = cv2.resize(frame, (self.internal_width, self.internal_height),
-                             interpolation=cv2.INTER_NEAREST)
+        resized = cv2.resize(
+            frame, (self.internal_width, self.internal_height), interpolation=cv2.INTER_NEAREST
+        )
         if resized.ndim == 2:
             resized = resized[:, :, None]
         self.img = resized
@@ -174,7 +179,7 @@ class GenericGameEnv(gym.Env):
 
         actions = np.asarray(actions)
         if actions.ndim > 1:
-            actions = actions.reshape(-1)[-self.num_actions:]
+            actions = actions.reshape(-1)[-self.num_actions :]
         if actions.shape[-1] != self.num_actions:
             raise ValueError(
                 f"action vector has width {actions.shape[-1]}, environment expects "
@@ -199,7 +204,7 @@ class GenericGameEnv(gym.Env):
 
         return observation, 0.0, False, False, {}
 
-    def reset(self, seed=None, options=None) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def reset(self, seed=None, options=None) -> tuple[np.ndarray, dict[str, Any]]:
         super().reset(seed=seed, options=options)
         if self.emitter is not None:
             self.emitter.release_all()
@@ -228,7 +233,7 @@ class GenericGameEnv(gym.Env):
     # ---------------- window discovery ----------------
 
     @staticmethod
-    def find_window_by_process_name(process_name: str) -> Optional[int]:
+    def find_window_by_process_name(process_name: str) -> int | None:
         if not windows.HAS_WIN32:
             return None
         found = []
@@ -237,6 +242,7 @@ class GenericGameEnv(gym.Env):
             if not windows.win32gui.IsWindowVisible(hwnd):
                 return True
             import psutil
+
             try:
                 _, pid = windows.win32process.GetWindowThreadProcessId(hwnd)
                 if process_name.lower() in psutil.Process(pid).name().lower():

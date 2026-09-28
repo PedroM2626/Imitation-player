@@ -16,9 +16,10 @@ Two problems in the previous implementation are fixed here:
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
-
 import ctypes
+from collections.abc import Callable
+from typing import Any
+
 import numpy as np
 
 XINPUT_BUTTON_MASKS = {
@@ -49,10 +50,20 @@ _STICK_FIELDS = {
 # Keyboard stand-ins, used when no physical pad is connected. A profile may
 # override any of these with input.keyboard_keys = {"<mapping name>": "<key>"}.
 DEFAULT_KEYBOARD_KEYS = {
-    "UP": "up", "DOWN": "down", "LEFT": "left", "RIGHT": "right",
-    "CROSS": "i", "CIRCLE": "o", "SQUARE": "p", "TRIANGLE": "u",
-    "L2": "j", "R2": "k", "L3": "l", "R3": "semicolon",
-    "CAM_RIGHT": "right", "CAM_LEFT": "left",
+    "UP": "up",
+    "DOWN": "down",
+    "LEFT": "left",
+    "RIGHT": "right",
+    "CROSS": "i",
+    "CIRCLE": "o",
+    "SQUARE": "p",
+    "TRIANGLE": "u",
+    "L2": "j",
+    "R2": "k",
+    "L3": "l",
+    "R3": "semicolon",
+    "CAM_RIGHT": "right",
+    "CAM_LEFT": "left",
 }
 
 
@@ -90,7 +101,7 @@ class XInputState:
     def available(self) -> bool:
         return self._lib is not None
 
-    def read(self) -> Optional[_XInputGamepad]:
+    def read(self) -> _XInputGamepad | None:
         if self._lib is None:
             return None
         state = _XInputState()
@@ -99,7 +110,7 @@ class XInputState:
         return None
 
 
-def _gamepad_predicate(mapping: Dict[str, Any], input_cfg: Dict[str, Any]) -> Callable[[Any], bool]:
+def _gamepad_predicate(mapping: dict[str, Any], input_cfg: dict[str, Any]) -> Callable[[Any], bool]:
     kind = mapping["kind"]
     if kind == "button":
         mask = XINPUT_BUTTON_MASKS[mapping["button"]]
@@ -117,32 +128,43 @@ def _gamepad_predicate(mapping: Dict[str, Any], input_cfg: Dict[str, Any]) -> Ca
         magnitude = abs(value)
         if mapping["stick"] == "left":
             threshold = int(input_cfg.get("deadzone", 8000))
-            dpad = {("left", "y", -1): "DPAD_UP", ("left", "y", 1): "DPAD_DOWN",
-                    ("left", "x", -1): "DPAD_LEFT", ("left", "x", 1): "DPAD_RIGHT"}
-            pad_mask = XINPUT_BUTTON_MASKS.get(dpad.get((mapping["stick"], mapping["axis"], sign), ""), 0)
-            return lambda g: (sign * getattr(g, field) > threshold) or (pad_mask and bool(g.wButtons & pad_mask))
+            dpad = {
+                ("left", "y", -1): "DPAD_UP",
+                ("left", "y", 1): "DPAD_DOWN",
+                ("left", "x", -1): "DPAD_LEFT",
+                ("left", "x", 1): "DPAD_RIGHT",
+            }
+            pad_mask = XINPUT_BUTTON_MASKS.get(
+                dpad.get((mapping["stick"], mapping["axis"], sign), ""), 0
+            )
+            return lambda g: (
+                (sign * getattr(g, field) > threshold) or (pad_mask and bool(g.wButtons & pad_mask))
+            )
         # Right stick: the +/-0.5 flags fire in the half band, the +/-1.0 flags above it.
         half = int(input_cfg.get("camera_half_deadzone", 8000))
         full = int(input_cfg.get("camera_full_deadzone", 20000))
         ceiling = full if magnitude >= 1.0 else half
         return lambda g: sign * getattr(g, field) > ceiling
 
-    raise ValueError(f"mapping {mapping.get('name')!r} has kind {kind!r}, which is not a gamepad control")
+    raise ValueError(
+        f"mapping {mapping.get('name')!r} has kind {kind!r}, which is not a gamepad control"
+    )
 
 
 class HumanInput:
     """Reads one action vector per call, from the device the profile asks for."""
 
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         self.config = config
         actions = config["actions"]
-        self.mappings: List[Dict[str, Any]] = actions["mappings"]
+        self.mappings: list[dict[str, Any]] = actions["mappings"]
         self.num_actions = int(actions["num_actions"])
         self.mode = actions.get("input_mode", "gamepad")
         self.input_cfg = config.get("input", {})
         self.pad = XInputState()
         self._predicates = [
-            _gamepad_predicate(m, self.input_cfg) for m in self.mappings
+            _gamepad_predicate(m, self.input_cfg)
+            for m in self.mappings
             if m["kind"] in ("button", "trigger", "axis")
         ]
         self._keyboard = self._load_keyboard()
@@ -150,11 +172,12 @@ class HumanInput:
     def _load_keyboard(self):
         try:
             import keyboard
+
             return keyboard
         except Exception:  # noqa: BLE001 - needs root on Linux, absent deps elsewhere
             return None
 
-    def _key_bindings(self) -> Dict[int, str]:
+    def _key_bindings(self) -> dict[int, str]:
         overrides = dict(DEFAULT_KEYBOARD_KEYS)
         overrides.update(self.input_cfg.get("keyboard_keys", {}))
         bindings = {}
@@ -170,11 +193,12 @@ class HumanInput:
         if self.mode == "keyboard_mouse":
             return self._read_keyboard_mouse(action)
 
-        gamepad_bits = [i for i, m in enumerate(self.mappings)
-                        if m["kind"] in ("button", "trigger", "axis")]
+        gamepad_bits = [
+            i for i, m in enumerate(self.mappings) if m["kind"] in ("button", "trigger", "axis")
+        ]
         state = self.pad.read()
         if state is not None:
-            for bit, predicate in zip(gamepad_bits, self._predicates):
+            for bit, predicate in zip(gamepad_bits, self._predicates, strict=True):
                 if predicate(state):
                     action[bit] = 1.0
             return action
@@ -195,10 +219,10 @@ class HumanInput:
         except Exception:  # noqa: BLE001
             mouse = None
         for i, m in enumerate(self.mappings):
-            if m["kind"] == "key":
-                if self._keyboard.is_pressed(m["key"]):
-                    action[i] = 1.0
-            elif m["kind"] == "mouse_button" and mouse is not None:
-                if mouse.is_pressed(m["button"]):
-                    action[i] = 1.0
+            pressed_key = m["kind"] == "key" and self._keyboard.is_pressed(m["key"])
+            pressed_button = (
+                m["kind"] == "mouse_button" and mouse is not None and mouse.is_pressed(m["button"])
+            )
+            if pressed_key or pressed_button:
+                action[i] = 1.0
         return action
