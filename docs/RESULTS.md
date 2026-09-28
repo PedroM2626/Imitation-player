@@ -1,7 +1,8 @@
 # Results
 
 > Every number in this document was re-read from the local MLflow file store
-> (`generic_agent/mlruns/`, `hajime_agent/mlruns/`) and from the demo files themselves, not copied
+> (now `runs/hajime_ippo/mlruns/`; formerly `generic_agent/mlruns/` and `hajime_agent/mlruns/`) and from
+> the demo files themselves, not copied
 > from a README. The store is **not version controlled** ([README §15.2](../README.md#152-what-is-and-is-not-versioned)),
 > so these figures are currently reproducible only on the workstation that produced them.
 
@@ -20,7 +21,7 @@ records optimisation telemetry only.
 ## 2. Completed benchmark runs (`Model_Comparison`)
 
 All completed runs share the protocol of [README §9](../README.md#9-experimental-protocol): 10 epochs,
-batch 384, lr 1e-4, `cuda`, seed 42, the same `generic_agent/notebooks/demos/` corpus.
+batch 384, lr 1e-4, `cuda`, seed 42, the same corpus now filed at `runs/hajime_ippo/demos/`.
 
 | # | Encoder | Status | Final loss | Train time (s) | Wall clock (s) | Params | Checkpoint (MB) | `prob_true_act` | Logged `bc/loss` points |
 |---|---|---|---|---|---|---|---|---|---|
@@ -55,7 +56,7 @@ Notes:
 ## 3. Headline table = one selected run per encoder
 
 The published comparison ([README §10.1](../README.md#101-headline-benchmark),
-`generic_agent/notebooks/models/comparison_results.md`) reports rows 1, 3, 5, 6, 9 and 11. That
+`runs/hajime_ippo/models/comparison_results.md`) reports rows 1, 3, 5, 6, 9 and 11. That
 selection is what `compare_models.py` produces in a single full pass: it trains each architecture once
 and the last-written run per architecture is the one that reaches the generated table. The fallback
 baselines baked into `compare_models.py` now carry these same six values; they previously carried
@@ -100,7 +101,7 @@ L_marginal = Σ_i H(m_i)  where  m_i = mean over frames of action bit i
 ```
 
 Computed directly from the reconciled 9-bit demonstration labels
-(`generic_agent/notebooks/demos/`, 27,161 frames):
+(`runs/hajime_ippo/demos/` — recorded under the old `generic_agent` package, 27,161 frames):
 
 | Predictor | In-sample NLL (nats) | Derivation |
 |---|---|---|
@@ -144,7 +145,7 @@ architecture family but 100–300 epochs instead of 10.
 | F | 100 | — | — | 0 | 7.8 s | failed at start |
 
 Run A is the source of the retained
-[`progress.csv`](../generic_agent/notebooks/models/imitation/bc_logs/progress.csv) (43 rows, epoch
+[`progress.csv`](../runs/hajime_ippo/logs/progress.csv) (43 rows, epoch
 0 → 292, samples 384 → 7,872,384, loss 4.851 → 1.330, `prob_true_act` 0.0078 → 0.4826; `bc/l2_loss` is
 `0.0` on every row because the gradient penalty term is disabled).
 
@@ -205,3 +206,21 @@ survives, so even the architecture cannot be re-instantiated from source.
 7. **Hajime package has no benchmark.** Its store holds a single 100-epoch BC run whose numbers are
    identical to a run in the generic store, and its 6,151-frame demonstration was never used to
    produce a comparison row.
+
+## 9. What a run produced by the current tooling records
+
+Every figure above predates the restructuring, so three things differ for any new run — stated here so a
+reader can tell a historical number from a current one.
+
+| Aspect | Recorded runs (2026-05-23 → 2026-07-29) | New runs |
+|---|---|---|
+| Experiment name | `Model_Comparison`, `Hajime_no_Ippo_Imitation_Learning` (the latter also received runs from the package that was not Hajime) | `f"{profile}_{purpose}"`, e.g. `hajime_ippo_imitation_bc`, `hajime_ippo_gail` |
+| Dataset provenance | nothing about the corpus was logged; a run that silently skipped a file looked normal | `corpus_frames`, `corpus_trajectories`, `num_actions`, `distinct_joint_actions`, seed and width policy are logged per run |
+| Reference points | none | `marginal_baseline_nats` and `uniform_baseline_nats` logged per run, printed before training, and rendered as a "Margin over the marginal baseline" row in the generated table |
+| Dead metrics | `bc/l2_loss` written as a constant `0.0` | excluded from the store; `bc/l2_norm` retained |
+| Label integrity | widths silently coerced to the configured value | strict by default: loading refuses a corpus whose widths disagree with the profile |
+| Store location | `generic_agent/mlruns/`, `hajime_agent/mlruns/` | `runs/<profile>/mlruns/` |
+
+The consequence for the tables above is unchanged and worth repeating: they are 9-bit, in-sample losses
+with no baseline reference, produced by a harness that could not tell you how many frames it read. The
+tooling can now answer that question; the numbers have not been regenerated.

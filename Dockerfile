@@ -1,44 +1,40 @@
-# Use an official NVIDIA PyTorch image as parent image
+# CUDA training image.
+#
+# Offline behavioural cloning (agent.cli.train / agent.cli.benchmark) works
+# here because the environment is created with dummy=True. Recording, deployment
+# and GAIL do not: they need a real window, and the capture/actuation layer is
+# Windows-only by nature (dxcam, pywin32, vgamepad).
+#
+# Build:  docker build -t imitation-player .
+# Run:    docker run --rm --gpus all -v "$PWD/runs:/app/runs" imitation-player \
+#             python -m agent.cli.train --profile hajime_ippo --arch impoola --epochs 10
+
 FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
 
-# Install python 3.11 and dependencies
-RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3-pip \
-    python3.11-dev \
-    git \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    && rm -rf /var/lib/apt/lists/*
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    IMITATION_PROFILE=hajime_ippo
 
-# Set python3.11 as default python
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
-    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+# The base CUDA runtime image ships no interpreter, so install one plus the
+# OpenCV runtime libraries.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 python3.11-venv python3-pip \
+        libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
 
-# Set the working directory
 WORKDIR /app
 
-# Copy the requirements file
-COPY requirements.txt .
+COPY requirements-docker.txt /app/requirements-docker.txt
+RUN python -m pip install --upgrade pip setuptools wheel \
+    && python -m pip install --index-url https://download.pytorch.org/whl/cu121 \
+           torch==2.5.1+cu121 torchvision==0.20.1+cu121 \
+    && python -m pip install -r requirements-docker.txt
 
-# Install dependencies (CPU/GPU wheels will be resolved)
-# Note: we filter out windows-specific libraries (dxcam, pywin32, vgamepad, inputs, keyboard) 
-# as they will fail to install or run on Linux.
-RUN sed -i '/dxcam/d' requirements.txt \
-    && sed -i '/pywin32/d' requirements.txt \
-    && sed -i '/vgamepad/d' requirements.txt \
-    && sed -i '/inputs/d' requirements.txt \
-    && sed -i '/keyboard/d' requirements.txt \
-    && pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+COPY agent /app/agent
+COPY runs /app/runs
+COPY README.md /app/README.md
 
-# Copy the project files
-COPY . .
-
-# Set default environment variables
-ENV MLFLOW_TRACKING_URI=file:/app/mlruns
-
-# Command to run training
-CMD ["python", "hajime_agent/notebooks/train_agent.py"]
+# Default to one epoch on CPU so `docker run` verifies the install end to end.
+CMD ["python", "-m", "agent.cli.train", "--arch", "impoola", "--epochs", "1", "--batch", "64", "--device", "cpu"]

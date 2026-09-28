@@ -1,0 +1,15 @@
+# Dependencies for the Linux/CUDA training container: the frozen requirements.txt
+# minus the Windows-only capture and actuation packages (dxcam, pywin32,
+# vgamepad, keyboard, mouse, PyDirectInput, inputs, comtypes) and minus the
+# local-version wheels that the Dockerfile installs from PyTorch's CUDA index.
+#
+# Keep in sync with requirements-minimal.txt, which is the same list for Windows.
+gymnasium==0.29.1
+stable-baselines3==2.2.1
+imitation==1.0.1
+mlflow==3.12.0
+numpy==2.4.4
+opencv-python==4.13.0.92
+psutil==7.2.2
+pygame==2.6.1
+mss==10.2.0

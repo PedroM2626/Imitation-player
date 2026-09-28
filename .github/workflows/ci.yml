@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    # Linux is deliberate: it is the platform the environment layer used to be
+    # unimportable on. Passing here proves offline training no longer needs
+    # Windows or the ViGEmBus driver.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install torch==2.5.1 torchvision==0.20.1 \
+            --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r requirements-docker.txt
+          python -m pip install pytest pytest-timeout
+
+      - name: Static checks
+        run: |
+          python -m compileall -q agent tests
+          python - <<'PY'
+          import glob, re, sys
+          bad = []
+          for f in glob.glob("agent/**/*.py", recursive=True) + glob.glob("tests/*.py"):
+              text = open(f, encoding="utf-8").read()
+              if re.search(r"[áéíóúãõçâêôñ]", text):
+                  bad.append(f)
+          if bad:
+              print("Non-English text found in:", bad); sys.exit(1)
+          print("language check ok")
+          PY
+
+      - name: Test suite
+        run: python -m pytest -q --timeout=900
+
+      - name: Train one epoch on the reference corpus path layout
+        run: |
+          python - <<'PY'
+          import numpy as np, torch as th, pathlib
+          from imitation.data.types import Trajectory
+          d = pathlib.Path("runs/ci_smoke/demos"); d.mkdir(parents=True, exist_ok=True)
+          rng = np.random.default_rng(0)
+          obs = rng.integers(0, 256, size=(41, 4, 128, 128), dtype=np.uint8)
+          acts = (rng.random((40, 18)) > 0.7).astype(np.float32)
+          th.save([Trajectory(obs=obs, acts=acts, infos=None, terminal=False)], d / "demo_0_ci.pt")
+          PY
+          python -m agent.cli.train --profile hajime_ippo --runs-root runs_ci \
+            --arch impoola --epochs 1 --batch 16 --device cpu
+        env:
+          IMITATION_RUNS: ${{ github.workspace }}/runs_ci
