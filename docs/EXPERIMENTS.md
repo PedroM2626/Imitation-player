@@ -12,9 +12,9 @@
 | Demonstration source | `runs/<profile>/demos/`, glob `demo*.pt` | `agent/utils/paths.demos_dir`, derived from the profile (`demo_path` no longer exists as a config field) |
 | Checkpoint destination | `runs/<profile>/models/` | `agent/utils/paths.models_dir` |
 | MLflow tracking URI | `file:runs/<profile>/mlruns` | `agent/utils/tracking.configure_store` |
-| Device | `cuda` when `th.cuda.is_available()`, else `cpu`; an explicit `--device` overrides either | `agent/cli/common.resolve_device` (36-44) |
+| Device | `cuda` when `th.cuda.is_available()`, else `cpu`; an explicit `--device` overrides either | `agent/cli/common.resolve_device` (43-51) |
 | Objective | sigmoid-bernoulli BC NLL, **summed over bits**, in **nats** | `imitation.BC` |
-| RNG | `np.random.default_rng(seed=42)` — in every training run, not only the benchmark | `SEED` in `agent/cli/train.py:34`, `agent/cli/train_gail.py:36` |
+| RNG | `np.random.default_rng(seed=42)` — in every training run, not only the benchmark | `SEED` in `agent/cli/train.py:41`, `agent/cli/train_gail.py:41` |
 | Torch seeding | **none** — no `torch.manual_seed`, no `cudnn.deterministic` | — |
 
 Because every path is derived from the selected profile rather than the working directory, the runs root
@@ -233,7 +233,7 @@ measure, and a fallback table that must be hand-updated will drift.
 1. Implement `class MyExtractor(BaseFeaturesExtractor)` in `agent/utils/`, taking
    `(observation_space, features_dim=512, **kwargs)` and mapping `(B, 4, 128, 128) → (B, features_dim)`.
    Keep it **stateless** — do not replicate `TemporalAttentionLSTM`'s cross-call buffer
-   ([ARCHITECTURE.md §4.5](ARCHITECTURE.md#45-temporalattentionlstm-agentutilstemporallstmpy28)).
+   ([ARCHITECTURE.md §4.5](ARCHITECTURE.md#45-temporalattentionlstm--agentutils_temporal_lstmpy27)).
 2. Add one entry to `ARCHITECTURES` in `agent/utils/architectures.py` with its `name`,
    `checkpoint_prefix`, `factory` and constructor `kwargs`; the trainer, the deployer and the benchmark all
    read that registry. To appear as a benchmark column, add the key to `COLUMN_ORDER` and `DISPLAY` in

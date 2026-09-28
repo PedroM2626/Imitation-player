@@ -298,9 +298,11 @@ The 18-dimensional gamepad layout, as implemented in `step()` (indices are hard-
 | 14–17 | right stick y (camera) | `−0.5, −1.0, +0.5, +1.0` | 4-way discretised |
 
 Axis directions are encoded as **orthogonal binary flags** rather than a continuous value, so a
-single network head (`MultiBinary` logits) can express them; conflicting flags within an axis group
-resolve to whichever index is tested last (`game_env.py:248-261`), an implicit and undocumented
-precedence.
+single network head (`MultiBinary` logits) can express them. Conflicting flags within one axis group
+**sum and then clamp to `[-1, 1]`** (`agent/utils/emission.py`), so opposing predictions cancel out.
+The previous implementation instead let whichever index happened to be tested last win, an implicit and
+undocumented precedence that is now covered by
+`tests/test_emission.py::test_opposing_axis_bits_cancel`.
 
 The 9-dimensional keyboard/mouse layout used by the `roblox` example profile maps each
 index to a `pydirectinput` key or mouse button through the `actions.mappings` table.
@@ -502,7 +504,7 @@ here; it is the cheap baseline against which the custom encoders are judged.
 - **Weakness:** no explicit temporal model beyond the 4 stacked frames; each decision is
   memoryless.
 
-### 7.2 CNN + LSTM + temporal attention (`TemporalAttentionLSTM`, `utils/game_env.py:379-523`)
+### 7.2 CNN + LSTM + temporal attention (`TemporalAttentionLSTM`, `agent/utils/temporal_lstm.py`)
 
 ```
 (B,4,128,128)

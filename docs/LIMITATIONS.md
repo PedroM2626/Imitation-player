@@ -53,7 +53,8 @@ than capacity.
 **Evidence.** Bits 7–17 have marginal exactly 0.0 in every existing file. Only 45 distinct joint actions
 occur in 27,161 generic-pool frames and 24 in the Hajime session, of `2¹⁸`.
 **Root cause, now fixed.** The old gamepad recorder wrote **only indices 0–6**
-(`record_trajectories.py:122-155`, with `# Other buttons can be mapped here` marking the gap), so
+(`generic_agent/notebooks/record_trajectories.py:122-155` as it then was, with
+`# Other buttons can be mapped here` marking the gap), so
 triggers, stick press and the camera axes could not be demonstrated no matter how the operator played.
 `agent/utils/input_map.py` now maps `bLeftTrigger`/`bRightTrigger`, both thumb presses and
 `sThumbRX/RY` onto bits 7–17, and `agent/utils/emission.py` drives the device from the same table, so

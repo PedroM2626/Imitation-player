@@ -176,7 +176,7 @@ in.
 Demo loading was wrapped per-file in `try/except Exception` that printed one line and continued, so a
 corrupted, wrong-width or unreadable trajectory reduced the dataset without failing the run. That is now
 a hard error: `load_demos()` collects every unreadable file and raises `DemoError` listing all of them
-(`agent/utils/demos.py:87`). The corpus size is also recorded — `agent.utils.demos.summarise()` computes
+(`agent/utils/demos.py:92`). The corpus size is also recorded — `agent.utils.demos.summarise()` computes
 the frame count, trajectory count, action width and distinct joint-action count, and
 `agent.utils.tracking.log_dataset()` writes them, with the two reference losses, into every run, so a
 benchmark trained on half the data is no longer indistinguishable from one trained on all of it. There is

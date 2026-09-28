@@ -21,16 +21,16 @@ imports on any platform:
 | 32 | `import dxcam` | Windows Desktop Duplication API (GPU-side screen grab) |
 
 Each of those sits inside `if IS_WINDOWS:` and a `try/except`, setting `HAS_WIN32`, `HAS_DXCAM` and
-`HAS_VGAMEPAD` (lines 22-40). `mss` is imported at `windows.py:44` on any platform and used lazily by
+`HAS_VGAMEPAD` (lines 22-46). `mss` is imported at `windows.py:46` on any platform and used lazily by
 `_open_capture`, and `pydirectinput` is imported inside `KeyboardMouseEmitter.__init__`
-(`agent/utils/emission.py:126`), so both are optional at import time but still Windows-bound at runtime.
+(`agent/utils/emission.py:139`), so both are optional at import time but still Windows-bound at runtime.
 `keyboard` is imported inside the CLI loops that need hotkeys (`agent/cli/record.py`,
 `agent/cli/deploy.py`, `agent/cli/dagger.py`), never at module scope; `mouse` is imported lazily inside
 the `keyboard_mouse` branch of `agent/utils/input_map.py`.
 `test_xinput.py:4` does `ctypes.windll.xinput1_4`, which exists only on Windows.
 
 **Consequence for offline work.** `GenericGameEnv` accepts `config["dummy"] = True` and returns from
-`__init__` (line 82) before any window, emitter or camera is created — and because the Windows modules
+`__init__` (line 83) before any window, emitter or camera is created — and because the Windows modules
 are now behind the flags in `agent/utils/windows.py`, importing `agent.utils.game_env` on Linux, or on a
 Windows machine without the ViGEmBus driver, no longer fails: `vgamepad/__init__.py` still instantiates
 its module global `VBUS = VBus()` at import time and `VBus.__init__` raises on any non-`VIGEM_ERROR_NONE`
@@ -45,7 +45,7 @@ deployment and GAIL construct non-dummy environments, and gamepad mode raises a 
 - **GPU.** Any run of practical length needs an NVIDIA GPU with CUDA 12.x. The frozen environment
   pins `torch==2.5.1+cu121` (`requirements.txt:125`).
 - **What degrades without CUDA.** `--device` defaults to `None` on every training entry point, and
-  `agent/cli/common.resolve_device` (36-44) picks `cuda` when `th.cuda.is_available()` and `cpu`
+  `agent/cli/common.resolve_device` (43-51) picks `cuda` when `th.cuda.is_available()` and `cpu`
   otherwise, printing which it chose; an explicit `--device cuda` on a machine with no GPU is honoured and
   raises, as it should. Pass `--device cpu` explicitly on CPU machines and expect the 10-epoch
   benchmark (18 s – 55 min per encoder on GPU, README §10.1) to become impractical.
@@ -54,13 +54,13 @@ deployment and GAIL construct non-dummy environments, and gamepad mode raises a 
   defaults, not a measurement. With `--batch 384` over `(4, 128, 128)` float input, one input
   activation is `384 × 4 × 128 × 128 × 4 B ≈ 96 MiB`. The memory hotspot is the Impala-CNN flatten
   head: `ImpalaCNNExtractor` computes `flatten_dim = (128 // 2**3) × (128 // 2**3) × 128 = 16 × 16 ×
-  128 = 32 768` (`agent/utils/new_architectures.py:73-75`) and builds `Linear(32768 → 512)` (line 79), i.e.
+  128 = 32 768` (`agent/utils/new_architectures.py:74-76`) and builds `Linear(32768 → 512)` (line 80), i.e.
   16 777 216 weights ≈ 64 MiB of parameters, plus ≈ 64 MiB of gradients and ≈ 128 MiB of Adam
   moments for that single layer, plus a 48 MiB flatten activation per minibatch. The GAP-based
   `ImpoolaCNNExtractor` replaces that input with `AdaptiveAvgPool2d((1,1))`, so its head is
   `Linear(128 → 512)`. Recorded artefact sizes track this: 67.95 MB (Impala-CNN) vs 4.20 MB
   (Impoola-CNN) — README §10.1.
-- **Observed parameter counts**, logged as the MLflow metric `num_params` by `agent/cli/train.py:99-108`:
+- **Observed parameter counts**, logged as the MLflow metric `num_params` by `agent/cli/train.py:125-141`:
   NatureCNN 4 196 810 · CNN+LSTM+Attention 6 116 779 · ViT 2 448 010 · Impoola-CNN 1 009 258 ·
   Impala-CNN 17 720 938 · ResNet-18 11 516 938 (README §10.1).
 
@@ -134,7 +134,7 @@ pip install -r requirements-docker.txt
 
 | Package | Imported by |
 |---|---|
-| `torch`, `torchvision` | every `agent/utils/*.py`; `torchvision.models.resnet18` in `agent/utils/new_architectures.py:10` |
+| `torch`, `torchvision` | every `agent/utils/*.py`; `torchvision.models.resnet18` in `agent/utils/new_architectures.py:11` |
 | `gymnasium`, `stable-baselines3` | environment and policy classes |
 | `imitation` | `imitation.algorithms.BC`, `imitation.data.types.Trajectory`, `imitation.GAIL` |
 | `numpy`, `opencv-python` | array handling and `cv2.resize` / colour conversion |
@@ -155,7 +155,7 @@ driver. Install it from the ViGEm repository (`ViGEmBus_Setup_x64.exe`) and rebo
 Two failure modes, in order of severity:
 
 1. **Driver absent → `import vgamepad` raises** at module load — but that import now sits inside the
-   `try/except` in `agent/utils/windows.py:36-40`, so it is swallowed into `HAS_VGAMEPAD = False` instead
+   `try/except` in `agent/utils/windows.py:38-42`, so it is swallowed into `HAS_VGAMEPAD = False` instead
    of breaking the whole package. The failure surfaces later and only where it matters: constructing a
    live gamepad-mode environment raises `RuntimeError("input_mode='gamepad' needs vgamepad and the
    ViGEmBus driver …")` from `emission.build_emitter`. Dummy-mode training is unaffected. The underlying
@@ -173,23 +173,23 @@ training is unaffected (§1).
 ## 7. Game and emulator prerequisites
 
 - **Start the title before constructing the environment.** `find_window_by_process_name`
-  (`agent/utils/game_env.py:230-249`) enumerates visible top-level windows and matches the owning process name
+  (`agent/utils/game_env.py:236-255`) enumerates visible top-level windows and matches the owning process name
   case-insensitively against `GAME_CONFIG["process_name"]`, returning the **first** hit in enumeration
   order. If no window is found and `exe_path` is set, `__init__` does `Popen([exe_path, rom_path])`
-  (`agent/utils/game_env.py:86-93`), then `wait_start()` polls for one second at a time for **up to 120 seconds**
-  (`agent/utils/game_env.py:251-269`). On timeout it **raises `WindowNotFoundError`** with a message naming
+  (`agent/utils/game_env.py:87-92`), then `wait_start()` polls for one second at a time for **up to 120 seconds**
+  (`agent/utils/game_env.py:257-275`). On timeout it **raises `WindowNotFoundError`** with a message naming
   the process and the timeout, instead of printing a warning and leaving an object whose every later
   capture yields the black/previous-frame fallback; the CLI wrappers print that message and exit cleanly
   (`agent.cli.common.cli_entry`). **Look for the `Found window HWND:` line before trusting a recording.**
 - **Window offsets.** The grab rectangle is the window rect plus `window_offset.left/top` and minus
-  `window_offset.right/bottom` (`_window_region`, `agent/utils/game_env.py:108-115`). The committed defaults
+  `window_offset.right/bottom` (`_window_region`, `agent/utils/game_env.py:109-116`). The committed defaults
   (`left: 20, top: 100`) exist to skip an emulator's title bar and border. Adjust them per machine, or
   run the game borderless/fullscreen and zero them.
 - **Machine-specific paths are not in the profiles.** Both `agent/config/profiles/hajime_ippo.py` and
   `agent/config/profiles/roblox.py` set `"exe_path": None` and `"rom_path": None`; the emulator executable
   and ROM that used to be hard-coded in the Hajime config are supplied instead in
   `agent/config/local.py`, copied from `agent/config/local.example.py` and git-ignored. The loader
-  (`agent/config/__init__.py:44-56`) merges `LOCAL_OVERRIDES[<profile>]` over the profile and honours only
+  (`agent/config/__init__.py:47-59`) merges `LOCAL_OVERRIDES[<profile>]` over the profile and honours only
   `exe_path`, `rom_path` and `process_name`. Leaving `exe_path` as `None` means the target window must
   already be open.
 - **`keyboard_mouse` mode** (the `roblox` profile) additionally requires
@@ -271,10 +271,10 @@ Windows-only for the live path and cross-platform for the offline one.
 
 | Package | Purpose in this repository | Linux status | Workaround |
 |---|---|---|---|
-| `dxcam==0.3.0` | GPU screen capture via Desktop Duplication | Unavailable (WDDM/DXGI only) | imported behind `windows.HAS_DXCAM`; the `mss` CPU fallback is coded at `agent/utils/game_env.py:129-134`, and the module now imports with neither present |
+| `dxcam==0.3.0` | GPU screen capture via Desktop Duplication | Unavailable (WDDM/DXGI only) | imported behind `windows.HAS_DXCAM`; the `mss` CPU fallback is coded at `agent/utils/game_env.py:133-138`, and the module now imports with neither present |
 | `pywin32==311` | `win32gui` window enumeration/rect/move; `win32process` PID lookup | Unavailable | `windows.HAS_WIN32` gates it; window lookup simply finds nothing off Windows |
 | `vgamepad==0.1.0` | Virtual Xbox 360 pad via ViGEmBus | Windows backend only; `vgamepad.lin` needs `/dev/uinput` | `windows.HAS_VGAMEPAD` gates the import; gamepad mode then raises a pointed error from `emission.build_emitter`. uinput on Linux is still the missing piece |
-| `PyDirectInput==1.0.4` | Keyboard/mouse injection in `keyboard_mouse` mode | Unavailable (`ctypes.windll`) | `pynput`/`xdotool`; lazily imported already (`agent/utils/emission.py:126`) |
+| `PyDirectInput==1.0.4` | Keyboard/mouse injection in `keyboard_mouse` mode | Unavailable (`ctypes.windll`) | `pynput`/`xdotool`; lazily imported already (`agent/utils/emission.py:139`) |
 | `keyboard==0.13.5` | Hotkeys (`K`, `L`, `ESC`) and the keyboard stand-ins for every mapping (`↑ ↓ ← →`, `i/o/p/u`, `j/k`, `;`) | Needs root on Linux | `pynput`; imported inside the CLI loops, so the package imports without it |
 | `mouse==0.7.1` | Polling mouse-button state while recording | Needs root on Linux | `pynput` |
 | `inputs==0.5` | **unused by any repository module** | Cross-platform | dropped from both curated lists; still in the freeze |

@@ -217,14 +217,14 @@ Normalises internally when the input is unsigned (`/255` if `max > 1`). The chan
 `[32, 64, 128]` and `features_dim=512` are constructor defaults and are the values used in the
 benchmark.
 
-### 4.2 `ImpalaCNNExtractor` — `agent/utils/new_architectures.py:50`
+### 4.2 `ImpalaCNNExtractor` — `agent/utils/new_architectures.py:51`
 
 Identical convolutional stages, terminating in
 `Flatten → Linear(32768 → 512)`. The flatten dimension is derived from the pooled spatial extent
 (`16 × 16 × 128`), so it is valid only when `H = W` and divisible by 8; a non-square or
 non-power-of-two capture resolution raises at construction rather than at forward time.
 
-### 4.3 `ResNet18Extractor` — `agent/utils/new_architectures.py:98`
+### 4.3 `ResNet18Extractor` — `agent/utils/new_architectures.py:100`
 
 ```
 torchvision.resnet18(weights=None)
@@ -257,9 +257,9 @@ temporal embeddings are the three departures from vanilla ViT; without the last 
 not distinguish frame *t* from *t−1*, since patch tokens are otherwise permutation-equivariant within
 the stack.
 
-### 4.5 `TemporalAttentionLSTM` — `agent/utils/temporal_lstm.py:28`
+### 4.5 `TemporalAttentionLSTM` — `agent/utils/temporal_lstm.py:27`
 
-The only extractor that is stateful. Full description in [README §7.2](../README.md#72-cnn--lstm--temporal-attention-temporalattentionlstm-utilsgame_envpy379-523).
+The only extractor that is stateful. Full description in [README §7.2](../README.md#72-cnn--lstm--temporal-attention-temporalattentionlstm-agentutilstemporal_lstmpy).
 
 Architectural specifics worth recording:
 
@@ -288,11 +288,11 @@ resolve checkpoint -> load_policy -> policy.predict(obs) -> threshold to bits ->
 
 `agent/cli/deploy.py` contains an **aggressiveness** alternative to `policy.predict`: when the factor is
 not `1.0` (and the profile names at least one attack button), `PolicyRunner.sharpened`
-(`agent/utils/utils.py:26`) runs `extract_features → mlp_extractor → action_net`, sigmoids the logits,
+(`agent/utils/utils.py:28`) runs `extract_features → mlp_extractor → action_net`, sigmoids the logits,
 multiplies the probability of every index whose `mappings` entry has a `name` listed in
 `deploy.attack_buttons` by the factor, clamps to 1.0, and then samples with
 `np.random.rand() < probs`. It reads the factor from `GAME_CONFIG["deploy"]["aggressiveness"]`
-(`agent/cli/deploy.py:51`), the same dictionary the profile defines it in, so the branch is reachable by
+(`agent/cli/deploy.py:61`), the same dictionary the profile defines it in, so the branch is reachable by
 editing the profile rather than the script; `deploy.fps` is honoured in the same loop. Note also that
 the sampling path bypasses SB3's own action masking/dtype handling, so it is not equivalent to
 `predict(deterministic=False)`.
@@ -303,10 +303,10 @@ through `predict` and calls the extractor's `reset_hidden()` when it is reset. T
 ([README §5.3](../README.md#53-reward-termination-and-the-deployment-loop)), no step ever triggers that
 reset by itself.
 
-`get_last_index(dir, prefix, ext)` (`agent/utils/checkpoints.py:16`) resolves SB3's `bc_policy<N>.zip`
+`get_last_index(dir, prefix, ext)` (`agent/utils/checkpoints.py:15`) resolves SB3's `bc_policy<N>.zip`
 numbering by matching `prefix + r"(\d+)" + ext` and taking `max(int(...))`, returning `-1` when nothing
 matches; the comparison is numeric, and `list_checkpoints` sorts the same way. `resolve_checkpoint()`
-(`agent/utils/checkpoints.py:41`) then prefers the final `<prefix>.zip` and falls back to the highest
+(`agent/utils/checkpoints.py:46`) then prefers the final `<prefix>.zip` and falls back to the highest
 numbered checkpoint, both rooted at the profile's `runs/<profile>/models/` directory. The dead
 `STEPS_PATH = "./models/steps"` the old deployment scripts searched — a directory no script ever
 created, which made the numbered fallback unreachable and pinned deployment to `models/bc_policy.zip` —
